@@ -45,8 +45,12 @@ def handle_result(data: Dict[str, Any]) -> None:
     else:
         logger.info(f"Player with ID {winner} won with a score of {lowest_score}")
 
-    with open('CorrectWords.txt', 'a', encoding='utf-8') as file:
-        file.write('\n' + data['word'])
+    with open('CorrectWords.txt', 'r+', encoding='utf-8') as file:
+        inhalt = file.read()
+        if data['word'] in inhalt:
+            return
+        else:
+            file.write('\n' + data['word'])
 
 async def handle_round(data: Dict[str, Any]) -> str:
     """

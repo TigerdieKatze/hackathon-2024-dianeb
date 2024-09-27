@@ -1,0 +1,7 @@
+## config.json template
+
+```
+{
+    "SECRET": ""
+}
+```

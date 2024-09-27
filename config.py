@@ -13,6 +13,7 @@ RESULTS_FILE = os.path.join(DATA_DIR, 'results.txt')
 DYNAMIC_DATA_FILE = os.path.join(DATA_DIR, 'dynamic_data.json')
 
 IsInDockerContainer = os.environ.get('AM_I_IN_A_DOCKER_CONTAINER', False)
+IsFarmBot = os.environ.get('Farm', False)
 
 if IsInDockerContainer:
     DATA_DIR = '/app/data'

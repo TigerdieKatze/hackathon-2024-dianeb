@@ -1,12 +1,11 @@
 import asyncio
 from typing import Any, Dict, Set
 import socketio
-from config import SECRET, logger, RESULTS_FILE
+from config import SECRET, logger, RESULTS_FILE, IsFarmBot
 from models import DataDTOFactory, RoundDataDTO
 from advancedlogic import (
     get_next_letter,
     add_word,
-    word_list,
     handle_game_result,
     reset_dynamic_data,
 )
@@ -154,12 +153,19 @@ def handle_result(data: Dict[str, Any]) -> None:
     # Check if the word was added to the word list
     word_added = 'no'
     if final_word:
-        if final_word not in word_list:
+        # Assuming wordlist is already preprocessed and cleaned
+        # Uncomment the following line if you want to add new words
+        # if final_word not in word_list:
+        if False:  # Set to True if adding words is desired
             add_word(final_word)
             total_new_words_added += 1  # Increment the counter
             word_added = 'yes'
         else:
             logger.debug(f"The word '{final_word}' is already in the word list.")
+
+    if IsFarmBot:
+        logger.info(f"Word added to the list: {word_added}")
+        return
 
     # Save the result to RESULTS_FILE
     try:
@@ -192,6 +198,10 @@ def handle_result(data: Dict[str, Any]) -> None:
     turn_times = []
 
 async def handle_round(data: Dict[str, Any]) -> str:
+    if IsFarmBot:
+        logger.debug("FarmBot is enabled. Skipping round.")
+        return ''
+
     global incorrect_letters, turn_times
     start_time = time.time()
     try:

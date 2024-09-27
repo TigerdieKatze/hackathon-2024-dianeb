@@ -20,6 +20,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy project files
 COPY *.py .
+COPY *.pkl .
 
 # Create necessary directories
 RUN mkdir -p /app/data

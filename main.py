@@ -11,12 +11,6 @@ SERVER_URL = "https://games.uhno.de"
 
 sio = socketio.AsyncClient()
 
-def reset_game_state() -> None:
-    """Resets the game state for a new game."""
-    global guessed_letters
-    guessed_letters.clear()
-    print("Game state has been reset.")
-
 @sio.event
 async def connect() -> None:
     """Handles the connection event."""
@@ -34,7 +28,6 @@ async def handle_auth(success: bool) -> None:
 def handle_init(data: Dict[str, Any]) -> None:
     """Handles game initialization."""
     print("New game initialized!")
-    reset_game_state()
 
 def handle_result(data: Dict[str, Any]) -> None:
     """Handles the end of the game."""

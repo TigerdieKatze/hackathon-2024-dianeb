@@ -28,7 +28,7 @@ RUN mkdir -p /app/config
 RUN mkdir -p /app/pkls
 
 # Copy pkls
-COPY ./pkls/*.pkl .
+COPY pkls/*.pkl /app/pkls/
 
 # Create a non-root user and switch to it
 RUN useradd -m appuser

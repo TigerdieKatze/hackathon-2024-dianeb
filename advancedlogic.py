@@ -32,33 +32,37 @@ def get_next_letter(word_state: str, guessed_letters: List[str]) -> str:
     all_letters = set('ABCDEFGHIJKLMNOPQRSTUVWXYZ')
     unguessed_letters = all_letters - set(guessed_letters)
 
-    # Build regex pattern from word_state
-    word_state_regex = re.escape(word_state).replace('_', '.')
-    pattern = f".*{word_state_regex}.*"
+    # Build a precise regex pattern from word_state
+    word_state_regex = ''.join(['.' if c == '_' else re.escape(c) for c in word_state])
+    pattern = f"^{word_state_regex}$"
     regex = re.compile(pattern)
 
     # Filter words matching the pattern
     matching_words = [word for word in word_list if regex.fullmatch(word)]
 
     if matching_words:
-        # Count frequencies of unguessed letters in matching words
-        letter_counts = Counter()
-        for word in matching_words:
-            for letter in set(word):
-                if letter not in guessed_letters:
-                    letter_counts[letter] += 1
+        # Initialize counts for each position
+        position_letter_counts = [{} for _ in range(len(word_state))]
+        total_letter_counts = Counter()
 
-        if letter_counts:
-            # Return the most frequent unguessed letter
-            next_letter = letter_counts.most_common(1)[0][0]
-            logger.info(f"Selected next letter '{next_letter}' based on matching words.")
+        # Count frequencies of letters at each unguessed position
+        for word in matching_words:
+            for i, letter in enumerate(word):
+                if word_state[i] == '_' and letter not in guessed_letters:
+                    position_letter_counts[i][letter] = position_letter_counts[i].get(letter, 0) + 1
+                    total_letter_counts[letter] += 1
+
+        if total_letter_counts:
+            # Select the letter with the highest cumulative frequency
+            next_letter = total_letter_counts.most_common(1)[0][0]
+            logger.info(f"Selected next letter '{next_letter}' based on positional letter frequencies.")
             return next_letter
         else:
             logger.info("All letters in matching words have been guessed.")
     else:
         logger.info("No matching words found.")
 
-    # Guess based on overall letter frequency in German
+    # Fallback to overall letter frequency in German
     german_letter_frequency = [
         'E', 'N', 'I', 'S', 'R', 'A', 'T', 'D', 'H',
         'U', 'L', 'G', 'O', 'M', 'B', 'W', 'Z', 'K',
@@ -69,7 +73,7 @@ def get_next_letter(word_state: str, guessed_letters: List[str]) -> str:
             logger.info(f"Selected next letter '{letter}' based on letter frequency.")
             return letter
 
-    # If all letters have been guessed, return any unguessed letter
+    # Select any remaining unguessed letter
     if unguessed_letters:
         next_letter = unguessed_letters.pop()
         logger.warning(f"No letters left in frequency list. Selecting random unguessed letter '{next_letter}'.")

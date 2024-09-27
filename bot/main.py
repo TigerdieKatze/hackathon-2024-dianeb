@@ -1,11 +1,12 @@
 import asyncio
 from typing import Any, Dict, Set
 import socketio
-from config import SECRET, logger, RESULTS_FILE, IsFarmBot
+from config import SECRET, logger, RESULTS_FILE, IsFarmBot, WORD_LIST_FILE
 from models import DataDTOFactory, RoundDataDTO
 from advancedlogic import (
     get_next_letter,
     handle_game_result,
+    word_not_found
 )
 import time
 
@@ -87,6 +88,16 @@ def handle_init(data: Dict[str, Any]) -> None:
     incorrect_letters = set()  # Reset incorrect letters at the start of a new game
     turn_times = []  # Reset turn times
 
+def add_word_to_list(word: str) -> None:
+    """Adds the word to the word list."""
+    global total_new_words_added
+    try:
+        with open(WORD_LIST_FILE, 'a', encoding='utf-8') as f:
+            f.write(f"{word}\n")
+        total_new_words_added += 1
+    except Exception as e:
+        logger.error(f"Error adding word to list: {e}")
+
 def handle_result(data: Dict[str, Any]) -> None:
     """Handles the end of the game."""
     logger.info("Game over!")
@@ -149,6 +160,9 @@ def handle_result(data: Dict[str, Any]) -> None:
 
     # Check if the word was added to the word list
     word_added = 'no'
+    if word_not_found == True:
+        add_word = add_word_to_list(final_word)
+        word_added = 'yes'
 
     # Save the result to RESULTS_FILE
     try:

@@ -6,6 +6,7 @@ from logging.handlers import RotatingFileHandler
 DATA_DIR = './data'
 CONFIG_DIR = './config'
 PKL_DIR = './pkls'
+LIST_DIR = './lists'
 
 
 IsInDockerContainer = os.environ.get('AM_I_IN_A_DOCKER_CONTAINER', False)
@@ -15,6 +16,7 @@ if IsInDockerContainer:
     DATA_DIR = '/app/data'
     CONFIG_DIR = '/app/config'
     PKL_DIR = '/app/pkls'
+    LIST_DIR = '/app/lists'
 
 LOG_DIR = os.path.join(DATA_DIR, 'logs')
 CONFIG_FILE = os.path.join(CONFIG_DIR, 'config.json')
@@ -24,6 +26,7 @@ SINGLE_LETTER_FREQ_FILE = os.path.join(PKL_DIR, 'single_letter_freq.pkl')
 PAIR_LETTER_FREQ_FILE = os.path.join(PKL_DIR, 'pair_letter_freq.pkl')
 OVERALL_LETTER_FREQ_FILE = os.path.join(PKL_DIR, 'overall_letter_freq.pkl')
 CLEAN_WORDLIST_FILE = os.path.join(PKL_DIR, 'clean_wordlist.pkl')
+WORD_LIST_FILE = os.path.join(LIST_DIR, 'wordlist.txt')
 
 def load_config():
     with open(CONFIG_FILE, 'r') as f:

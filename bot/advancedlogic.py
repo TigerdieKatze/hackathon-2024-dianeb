@@ -184,8 +184,13 @@ german_letter_freq = {
     'Q': 0.02
 }
 
+word_not_found = False
+
 async def get_next_letter(word_state: str, guessed_letters: List[str], incorrect_letters: Set[str]) -> str:
     start_time = time.time()
+
+    global word_not_found
+    word_not_found = False
 
     # Always guess 'E' first if it hasn't been guessed yet
     if 'E' not in (letter.upper() for letter in guessed_letters):
@@ -196,7 +201,9 @@ async def get_next_letter(word_state: str, guessed_letters: List[str], incorrect
     possible_words = await get_possible_words(word_state, guessed_letters, incorrect_letters)
     if not possible_words:
         logger.warning("No possible words computed.")
-    
+
+        word_not_found = True
+        
         # Determine unguessed letters
         unguessed_letters = all_letters - guessed_letters_set
     

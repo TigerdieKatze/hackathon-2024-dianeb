@@ -26,9 +26,13 @@ RUN mkdir -p /app/data
 RUN mkdir -p /app/data/logs
 RUN mkdir -p /app/config
 RUN mkdir -p /app/pkls
+RUN mkdir -p /app/lists
 
 # Copy pkls
 COPY pkls/*.pkl /app/pkls/
+
+# Copy lists
+COPY lists/*.txt /app/lists/
 
 # Create a non-root user and switch to it
 RUN useradd -m appuser

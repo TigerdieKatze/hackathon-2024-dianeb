@@ -45,6 +45,9 @@ def handle_result(data: Dict[str, Any]) -> None:
     else:
         logger.info(f"Player with ID {winner} won with a score of {lowest_score}")
 
+    with open('CorrectWords.txt', 'a', encoding='utf-8') as file:
+        file.write('\n' + data['word'])
+
 async def handle_round(data: Dict[str, Any]) -> str:
     """
     Handles each round by selecting the next best letter to guess.

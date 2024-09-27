@@ -20,12 +20,15 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy project files
 COPY *.py .
-COPY *.pkl .
 
 # Create necessary directories
 RUN mkdir -p /app/data
 RUN mkdir -p /app/data/logs
 RUN mkdir -p /app/config
+RUN mkdir -p /app/pkls
+
+# Copy pkls
+COPY ./pkls/*.pkl .
 
 # Create a non-root user and switch to it
 RUN useradd -m appuser

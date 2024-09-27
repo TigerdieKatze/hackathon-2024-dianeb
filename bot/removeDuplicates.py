@@ -1,8 +1,7 @@
 import os
 from config import logger
 
-DATA_DIR = './data'
-WORD_LIST_FILE = os.path.join(DATA_DIR, 'wordlist.txt')
+WORD_LIST_FILE = './lists/wordlist.txt'
 
 def remove_duplicates(file_path):
     if not os.path.exists(file_path):

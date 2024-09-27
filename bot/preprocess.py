@@ -2,7 +2,9 @@ import os
 import pickle
 import unicodedata
 from collections import defaultdict, Counter
-from config import WORD_LIST_FILE, logger
+from config import logger, SINGLE_LETTER_FREQ_FILE, PAIR_LETTER_FREQ_FILE, OVERALL_LETTER_FREQ_FILE, CLEAN_WORDLIST_FILE
+
+WORD_LIST_FILE = './lists/wordlist.txt'
 
 def remove_accents(input_str: str) -> str:
     """
@@ -103,11 +105,11 @@ def save_frequencies(single_letter_freq: dict, pair_letter_freq: dict, overall_l
     Saves the precomputed frequencies to pickle files.
     """
     try:
-        with open('single_letter_freq.pkl', 'wb') as f:
+        with open(SINGLE_LETTER_FREQ_FILE, 'wb') as f:
             pickle.dump(single_letter_freq, f)
-        with open('pair_letter_freq.pkl', 'wb') as f:
+        with open(PAIR_LETTER_FREQ_FILE, 'wb') as f:
             pickle.dump(pair_letter_freq, f)
-        with open('overall_letter_freq.pkl', 'wb') as f:
+        with open(OVERALL_LETTER_FREQ_FILE, 'wb') as f:
             pickle.dump(overall_letter_freq, f)
         logger.info("Precomputed frequencies saved successfully.")
     except Exception as e:
@@ -118,7 +120,7 @@ def save_clean_wordlist(word_list: list) -> None:
     Saves the cleaned word list to a pickle file for efficient loading.
     """
     try:
-        with open('clean_wordlist.pkl', 'wb') as f:
+        with open(CLEAN_WORDLIST_FILE, 'wb') as f:
             pickle.dump(word_list, f)
         logger.info("Clean wordlist saved successfully.")
     except Exception as e:

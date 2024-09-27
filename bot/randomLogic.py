@@ -1,3 +1,5 @@
+# A relic from old times :)
+
 from typing import List
 from models import RoundDataDTO
 from config import logger

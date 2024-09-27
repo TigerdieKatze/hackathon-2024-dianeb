@@ -5,9 +5,7 @@ from config import SECRET, logger, RESULTS_FILE, IsFarmBot
 from models import DataDTOFactory, RoundDataDTO
 from advancedlogic import (
     get_next_letter,
-    add_word,
     handle_game_result,
-    reset_dynamic_data,
 )
 import time
 
@@ -85,7 +83,6 @@ async def handle_auth(success: bool) -> None:
 def handle_init(data: Dict[str, Any]) -> None:
     """Handles game initialization."""
     logger.info("New game initialized!")
-    reset_dynamic_data()
     global incorrect_letters, turn_times
     incorrect_letters = set()  # Reset incorrect letters at the start of a new game
     turn_times = []  # Reset turn times
@@ -152,19 +149,6 @@ def handle_result(data: Dict[str, Any]) -> None:
 
     # Check if the word was added to the word list
     word_added = 'no'
-    if final_word:
-        # Uncomment the following line if you want to add new words
-        # if final_word not in word_list:
-        if False:  # Set to True if adding words is desired
-            add_word(final_word)
-            total_new_words_added += 1  # Increment the counter
-            word_added = 'yes'
-        else:
-            logger.debug(f"The word '{final_word}' is already in the word list.")
-
-    if IsFarmBot:
-        logger.info(f"Word added to the list: {word_added}")
-        return
 
     # Save the result to RESULTS_FILE
     try:

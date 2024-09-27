@@ -2,7 +2,7 @@ import time
 import re
 from collections import Counter
 from typing import List, Dict, Set
-from config import IsFarmBot, logger, WORD_LIST_FILE, DYNAMIC_DATA_FILE
+from config import IsFarmBot, logger, SINGLE_LETTER_FREQ_FILE, PAIR_LETTER_FREQ_FILE, OVERALL_LETTER_FREQ_FILE, CLEAN_WORDLIST_FILE
 import json
 import os
 import fcntl
@@ -23,11 +23,11 @@ word_list_mtime: float = 0.0  # Modification time of the word list file
 def load_precomputed_frequencies():
     global single_letter_freq, pair_letter_freq, overall_letter_freq
     try:
-        with open('single_letter_freq.pkl', 'rb') as f:
+        with open(SINGLE_LETTER_FREQ_FILE, 'rb') as f:
             single_letter_freq = pickle.load(f)
-        with open('pair_letter_freq.pkl', 'rb') as f:
+        with open(PAIR_LETTER_FREQ_FILE, 'rb') as f:
             pair_letter_freq = pickle.load(f)
-        with open('overall_letter_freq.pkl', 'rb') as f:
+        with open(OVERALL_LETTER_FREQ_FILE, 'rb') as f:
             overall_letter_freq = pickle.load(f)
         logger.info("Loaded precomputed letter frequencies successfully.")
     except FileNotFoundError as e:
@@ -35,7 +35,7 @@ def load_precomputed_frequencies():
     except Exception as e:
         logger.error(f"Error loading precomputed frequencies: {e}")
 
-def load_clean_wordlist(pickle_file: str = 'clean_wordlist.pkl') -> None:
+def load_clean_wordlist(pickle_file: str = CLEAN_WORDLIST_FILE) -> None:
     global word_list, word_list_mtime
     try:
         current_mtime = os.path.getmtime(pickle_file)
@@ -61,42 +61,6 @@ def load_clean_wordlist(pickle_file: str = 'clean_wordlist.pkl') -> None:
     except Exception as e:
         logger.error(f"Error loading clean wordlist: {e}")
         word_list = []
-
-def load_dynamic_data():
-    start_time = time.time()
-    if os.path.exists(DYNAMIC_DATA_FILE):
-        try:
-            with open(DYNAMIC_DATA_FILE, 'r', encoding='utf-8') as f:
-                data = json.load(f)
-            end_time = time.time()
-            logger.info(f"Loaded dynamic data in {end_time - start_time:.4f} seconds.")
-            return data
-        except Exception as e:
-            logger.error(f"Error loading dynamic data: {e}")
-    end_time = time.time()
-    logger.info(f"No dynamic data found. Using default weights. Operation took {end_time - start_time:.4f} seconds.")
-    return {
-        'weights': {
-            'entropy_weight': 0.7,
-            'frequency_weight': 0.3
-        }
-    }
-
-dynamic_data = load_dynamic_data()
-
-def save_dynamic_data():
-    start_time = time.time()
-    try:
-        with open(DYNAMIC_DATA_FILE, 'w', encoding='utf-8') as f:
-            fcntl.flock(f, fcntl.LOCK_EX)
-            json.dump(dynamic_data, f)
-            f.flush()
-            os.fsync(f.fileno())
-            fcntl.flock(f, fcntl.LOCK_UN)
-        end_time = time.time()
-        logger.info(f"Saved dynamic data in {end_time - start_time:.4f} seconds.")
-    except Exception as e:
-        logger.error(f"Error saving dynamic data: {e}")
 
 # Initialize word list and letter frequencies
 load_clean_wordlist()
@@ -278,70 +242,10 @@ async def get_next_letter(word_state: str, guessed_letters: List[str], incorrect
     logger.info(f"Selected next letter '{next_letter}' based on highest frequency in {end_time - start_time:.4f} seconds.")
     return next_letter
 
-def add_word(new_word: str) -> None:
-    global word_list, overall_letter_freq
-    start_time = time.time()
-    new_word = new_word.strip().upper()
-    new_word = new_word.replace('Ä', 'AE').replace('Ö', 'OE').replace('Ü', 'UE').replace('ß', 'SS')
-    if len(new_word) >= 5:
-        try:
-            # Use file-based locking
-            with open(WORD_LIST_FILE, 'a+', encoding='utf-8') as f:
-                if not IsFarmBot:
-                    fcntl.flock(f, fcntl.LOCK_EX)
-                f.seek(0)
-                existing_words = set(line.strip().upper() for line in f)
-                if new_word not in existing_words:
-                    f.write('\n' + new_word)
-                    f.flush()
-                    os.fsync(f.fileno())
-                    logger.info(f"Added new word '{new_word}' to the word list.")
-                    # Update word_list and overall_letter_freq
-                    word_list.append(new_word)
-                    unique_letters = set(new_word)
-                    for letter in unique_letters:
-                        if letter in overall_letter_freq:
-                            overall_letter_freq[letter] += 1
-                        else:
-                            overall_letter_freq[letter] = 1
-                    # Normalize overall_letter_freq
-                    total_unique_letters = sum(overall_letter_freq.values())
-                    overall_letter_freq = {k: v / total_unique_letters for k, v in overall_letter_freq.items()}
-                else:
-                    logger.info(f"Word '{new_word}' is already in the word list.")
-                if not IsFarmBot:
-                    fcntl.flock(f, fcntl.LOCK_UN)
-            # Update the modification time after adding the word
-            global word_list_mtime
-            word_list_mtime = os.path.getmtime(WORD_LIST_FILE)
-            end_time = time.time()
-            logger.info(f"add_word function completed in {end_time - start_time:.4f} seconds.")
-        except Exception as e:
-            logger.error(f"Error adding word to word list: {e}")
-    else:
-        logger.debug(f"Word '{new_word}' is too short.")
-        end_time = time.time()
-        logger.info(f"add_word function completed in {end_time - start_time:.4f} seconds.")
-
-def adjust_weights(won: bool):
-    start_time = time.time()
-    weights = dynamic_data.get('weights', {})
-    if won:
-        weights['entropy_weight'] = min(weights.get('entropy_weight', 0.7) + 0.01, 0.9)
-        weights['frequency_weight'] = 1 - weights['entropy_weight']
-    else:
-        weights['entropy_weight'] = max(weights.get('entropy_weight', 0.7) - 0.01, 0.5)
-        weights['frequency_weight'] = 1 - weights['entropy_weight']
-    dynamic_data['weights'] = weights
-    save_dynamic_data()
-    end_time = time.time()
-    logger.info(f"Adjusted weights in {end_time - start_time:.4f} seconds. New weights: {weights}")
-
 def reset_dynamic_data():
     pass
 
 def handle_game_result(won: bool):
     start_time = time.time()
-    adjust_weights(won)
     end_time = time.time()
     logger.info(f"Handled game result in {end_time - start_time:.4f} seconds.")

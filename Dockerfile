@@ -20,10 +20,10 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy project files
 COPY *.py .
-COPY config.json /app/config.json
 
 # Create necessary directories
 RUN mkdir -p /app/data
+RUN mkdir -p /app/config
 
 # Create a non-root user and switch to it
 RUN useradd -m appuser

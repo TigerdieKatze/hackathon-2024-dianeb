@@ -4,7 +4,8 @@ from typing import List, Dict, Set
 from config import logger, WORD_LIST_FILE, DYNAMIC_DATA_FILE
 import json
 import os
-import fcntl  # Import for file-based locking
+import fcntl
+import math
 
 # Load and process the word list
 def load_word_list(file_path: str) -> List[str]:
@@ -34,7 +35,7 @@ def compute_letter_frequencies(words: List[str]) -> Dict[str, float]:
     letter_counts = Counter()
     total_letters = 0
     for word in words:
-        for letter in word:
+        for letter in set(word):  # Use set to prevent double-counting letters in the same word
             letter_counts[letter] += 1
             total_letters += 1
     letter_frequencies = {letter: count / total_letters for letter, count in letter_counts.items()}
@@ -54,9 +55,8 @@ def load_dynamic_data():
             logger.error(f"Error loading dynamic data: {e}")
     return {
         'weights': {
-            'position_weight': 0.5,
-            'ngram_weight': 0.3,
-            'letter_weight': 0.2
+            'entropy_weight': 0.7,
+            'frequency_weight': 0.3
         }
     }
 
@@ -81,40 +81,34 @@ def get_next_letter(word_state: str, guessed_letters: List[str], incorrect_lette
     all_letters = set('ABCDEFGHIJKLMNOPQRSTUVWXYZ')
     unguessed_letters = all_letters - guessed_letters
 
-    # Exclude incorrect letters
-    possible_letters = unguessed_letters - incorrect_letters
-
     # Build a precise regex pattern from word_state
     word_state_regex = ''.join(['.' if c == '_' else re.escape(c) for c in word_state])
     pattern = f"^{word_state_regex}$"
     regex = re.compile(pattern)
 
     # Filter words matching the pattern and not containing incorrect letters
-    matching_words = [
+    possible_words = [
         word for word in word_list
         if regex.fullmatch(word) and not set(word) & incorrect_letters
     ]
 
-    if matching_words:
-        # Compute letter frequencies among matching words
-        letter_counts = Counter()
-        for word in matching_words:
-            unique_letters_in_word = set(word) - guessed_letters
-            letter_counts.update(unique_letters_in_word)
-        if letter_counts:
-            # Select the unguessed letter that appears most frequently
-            next_letter = letter_counts.most_common(1)[0][0]
-            logger.info(f"Selected next letter '{next_letter}' based on frequency among matching words.")
+    if possible_words:
+        # Calculate letter scores based on entropy and frequency
+        letter_scores = calculate_letter_scores(possible_words, guessed_letters)
+        if letter_scores:
+            # Select the letter with the highest score
+            next_letter = max(letter_scores, key=letter_scores.get)
+            logger.info(f"Selected next letter '{next_letter}' based on advanced scoring.")
             return next_letter
         else:
-            logger.info("All letters in matching words have been guessed.")
+            logger.info("All letters in possible words have been guessed.")
     else:
         logger.info("No matching words found.")
 
     # Fallback to overall letter frequency
     unguessed_letter_freq = {
         letter: freq for letter, freq in letter_frequencies.items()
-        if letter in possible_letters
+        if letter in unguessed_letters
     }
     if unguessed_letter_freq:
         next_letter = max(unguessed_letter_freq, key=unguessed_letter_freq.get)
@@ -122,14 +116,43 @@ def get_next_letter(word_state: str, guessed_letters: List[str], incorrect_lette
         return next_letter
 
     # If all else fails, select any unguessed letter
-    if possible_letters:
-        next_letter = possible_letters.pop()
+    if unguessed_letters:
+        next_letter = unguessed_letters.pop()
         logger.warning(f"No letters left in frequency list. Selecting random unguessed letter '{next_letter}'.")
         return next_letter
 
     # All letters have been guessed
     logger.error("All letters have been guessed. Unable to select a valid letter.")
     return None
+
+def calculate_letter_scores(possible_words: List[str], guessed_letters: Set[str]) -> Dict[str, float]:
+    total_words = len(possible_words)
+    letter_counts = Counter()
+    position_counts = [Counter() for _ in range(len(possible_words[0]))]
+
+    for word in possible_words:
+        for idx, letter in enumerate(word):
+            if letter not in guessed_letters:
+                letter_counts[letter] += 1
+                position_counts[idx][letter] += 1
+
+    letter_scores = {}
+    for letter in letter_counts:
+        # Calculate entropy for each letter
+        entropy = 0
+        for idx in range(len(position_counts)):
+            position_freq = position_counts[idx][letter] / total_words if total_words > 0 else 0
+            if position_freq > 0:
+                entropy -= position_freq * math.log2(position_freq)
+        # Combine entropy and frequency
+        frequency = letter_counts[letter] / total_words if total_words > 0 else 0
+        weights = dynamic_data.get('weights', {})
+        entropy_weight = weights.get('entropy_weight', 0.7)
+        frequency_weight = weights.get('frequency_weight', 0.3)
+        score = entropy_weight * entropy + frequency_weight * frequency
+        letter_scores[letter] = score
+
+    return letter_scores
 
 # Function to add a new word to the word list
 def add_word(new_word: str) -> None:
@@ -162,12 +185,13 @@ def add_word(new_word: str) -> None:
 def adjust_weights(won: bool):
     weights = dynamic_data.get('weights', {})
     if won:
-        # If the bot won, slightly increase the weights
-        weights['letter_weight'] = min(weights.get('letter_weight', 0.2) + 0.05, 0.7)
+        # If the bot won, slightly increase the entropy weight
+        weights['entropy_weight'] = min(weights.get('entropy_weight', 0.7) + 0.01, 0.9)
+        weights['frequency_weight'] = 1 - weights['entropy_weight']
     else:
-        # If the bot lost, slightly decrease the weights
-        weights['letter_weight'] = max(weights.get('letter_weight', 0.2) - 0.05, 0.1)
-    # Ensure the weight does not exceed bounds
+        # If the bot lost, slightly decrease the entropy weight
+        weights['entropy_weight'] = max(weights.get('entropy_weight', 0.7) - 0.01, 0.5)
+        weights['frequency_weight'] = 1 - weights['entropy_weight']
     dynamic_data['weights'] = weights
     save_dynamic_data()
 

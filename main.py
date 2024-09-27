@@ -1,86 +1,99 @@
 import asyncio
+from typing import Any, Dict, Set, List
+
 import socketio
 from config import CONFIG
+from models import DataDTOFactory, RoundDataDTO
+from randomLogic import get_next_letter
 
 SECRET = CONFIG['SECRET']
 SERVER_URL = "https://games.uhno.de"
 
 sio = socketio.AsyncClient()
 
-# Prioritized letter list for guessing
-LETTER_ORDER = ['E', 'N', 'S', 'I', 'R', 'A', 'T', 'D', 'H', 'U', 'L', 'C', 'G', 'M', 'O', 'B', 'W', 'F', 'K', 'Z', 'P', 'V', 'J', 'Y', 'X', 'Q']
+def reset_game_state() -> None:
+    """Resets the game state for a new game."""
+    global guessed_letters
+    guessed_letters.clear()
+    print("Game state has been reset.")
 
 @sio.event
-async def connect():
-    print('Verbunden!')
+async def connect() -> None:
+    """Handles the connection event."""
+    print('Connected to the server!')
     await sio.emit('authenticate', SECRET, callback=handle_auth)
 
-async def handle_auth(success):
+async def handle_auth(success: bool) -> None:
+    """Handles authentication response."""
     if success:
-        print("Anmeldung erfolgreich")
+        print("Authentication successful")
     else:
-        print("Anmeldung fehlgeschlagen")
+        print("Authentication failed")
         await sio.disconnect()
 
-def handle_init(data):
-    print("Neue Runde!")
-    return None
+def handle_init(data: Dict[str, Any]) -> None:
+    """Handles game initialization."""
+    print("New game initialized!")
+    reset_game_state()
 
-def handle_result(data):
-    print("Runde vorbei!")
-    return None
+def handle_result(data: Dict[str, Any]) -> None:
+    """Handles the end of the game."""
+    print("Game over!")
+    print(data)
+    # Additional processing can be done here
 
-async def handle_round(data):
-    print("Round data received:", data)
-    
-    # Assuming data contains the current word state (e.g., 'H_LL_')
-    current_word = data.get('word', None)  # Extract the current word pattern if available
-    guessed_letters = data.get('guessed_letters', [])  # Get letters that have been guessed already
+async def handle_round(data: Dict[str, Any]) -> str:
+    """
+    Handles each round by selecting the next best letter to guess.
 
-    if current_word:
-        # Find next letter to guess based on LETTER_ORDER
-        for letter in LETTER_ORDER:
-            if letter not in guessed_letters:
-                print(f"Guessing the next letter: {letter}")
-                await sio.emit('guess', letter)  # Emit the guess event to the server
-                break
-    else:
-        raise NotImplementedError("Word state not provided in the round data")
+    Args:
+        data (Dict[str, Any]): The data dictionary containing round information.
+
+    Returns:
+        str: The next letter to guess.
+    """
+    round_data: RoundDataDTO = DataDTOFactory.create_dto(
+        data['type'],
+        data['players'],
+        data['log'],
+        data['self'],
+        data['word'],
+        data['guessed']
+    )
+    print(f"Round data received: {round_data.word}")
+
+    return get_next_letter(round_data)
 
 handlers = {
     'INIT': handle_init,
-    'ROUND': handle_round,
     'RESULT': handle_result
 }
 
 @sio.event
-async def data(data):
-    t = data['type']
-    handler = handlers.get(t)
-    
-    if handler:
-        # Check if the handler is an async function
-        if asyncio.iscoroutinefunction(handler):
-            await handler(data)  # Await async handlers like handle_round
-        else:
-            handler(data)  # Call regular functions like handle_init, handle_result
+async def data(data: Dict[str, Any]) -> Any:
+    """Dispatches incoming data to the appropriate handler."""
+    message_type = data.get('type')
+    if message_type == 'ROUND':
+        return await handle_round(data)
+    elif message_type in handlers:
+        handler = handlers[message_type]
+        handler(data)
     else:
-        print("Unbekannte Nachricht: ", data)
+        print("Unknown message type received:", data)
 
 @sio.event
-async def disconnect():
-    print('Verbindung beendet!')
-    asyncio.get_event_loop().stop()
+async def disconnect() -> None:
+    """Handles the disconnection event."""
+    print('Disconnected from the server!')
 
-async def main():
+async def main() -> None:
+    """Main function to start the client."""
     await sio.connect(SERVER_URL, transports=['websocket'])
     await sio.wait()
 
 if __name__ == '__main__':
     try:
-        loop = asyncio.get_event_loop()
-        loop.run_until_complete(main())
-        loop.close()
+        asyncio.run(main())
     except Exception as e:
         print(f"Error: {e}")
-        print("Byebye")
+        print("Exiting")

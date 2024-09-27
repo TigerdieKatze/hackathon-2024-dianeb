@@ -5,6 +5,7 @@ To get the libraries you need to do the following:
 
 ```
 {
-    "SECRET": ""
+    "SECRET": "",
+    "LOG_LEVEL": "INFO"
 }
 ```

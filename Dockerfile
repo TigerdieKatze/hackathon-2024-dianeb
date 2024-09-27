@@ -23,6 +23,7 @@ COPY *.py .
 
 # Create necessary directories
 RUN mkdir -p /app/data
+RUN mkdir -p /app/data/logs
 RUN mkdir -p /app/config
 
 # Create a non-root user and switch to it

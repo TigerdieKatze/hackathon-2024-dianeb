@@ -3,14 +3,24 @@ import json
 import logging
 from logging.handlers import RotatingFileHandler
 
-LOG_DIR = '/app/data/logs'
+DATA_DIR = './data'
+LOG_DIR = os.path.join(DATA_DIR, './logs')
+CONFIG_DIR = './config'
 LOG_FILE = os.path.join(LOG_DIR, 'bot.log')
+WORD_LIST_FILE = os.path.join(DATA_DIR, 'wordlist.txt')
+RESULTS_FILE = os.path.join(DATA_DIR, 'results.txt')
 
 CONFIG_FILE = './config.json'
 IsInDockerContainer = os.environ.get('AM_I_IN_A_DOCKER_CONTAINER', False)
 
 if IsInDockerContainer:
-    CONFIG_FILE = '/app/config/config.json'
+    DATA_DIR = '/app/data'
+    CONFIG_DIR = '/app/config'
+    CONFIG_FILE = os.path.join(CONFIG_DIR, 'config.json')
+    LOG_DIR = os.path.join(DATA_DIR, 'logs')
+    LOG_FILE = os.path.join(LOG_DIR, 'bot.log')
+    WORD_LIST_FILE = os.path.join(DATA_DIR, 'wordlist.txt')
+    RESULTS_FILE = os.path.join(DATA_DIR, 'results.txt')
 
 def load_config():
     with open(CONFIG_FILE, 'r') as f:
@@ -18,8 +28,9 @@ def load_config():
     
 CONFIG = load_config()
 
-# Ensure log directory exists
+# Ensure directories exist
 os.makedirs(LOG_DIR, exist_ok=True)
+os.makedirs(DATA_DIR, exist_ok=True)
 
 # Configure logging
 logging.basicConfig(level=getattr(logging, CONFIG.get("LOG_LEVEL", "INFO")),

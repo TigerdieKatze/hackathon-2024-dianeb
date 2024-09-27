@@ -1,9 +1,15 @@
 import asyncio
-from typing import Any, Dict
+from typing import Any, Dict, Set
 import socketio
 from config import CONFIG, logger, RESULTS_FILE
 from models import DataDTOFactory, RoundDataDTO
-from advancedlogic import get_next_letter, add_word, word_list
+from advancedlogic import (
+    get_next_letter,
+    add_word,
+    word_list,
+    handle_game_result,
+    reset_dynamic_data,
+)
 
 SECRET = CONFIG['SECRET']
 SERVER_URL = "https://games.uhno.de"
@@ -14,6 +20,9 @@ sio = socketio.AsyncClient()
 total_games = 0
 total_wins = 0
 error_counts_per_word_length = {}  # key: word_length, value: {'errors': total_errors, 'games': num_games}
+
+# Global variable for incorrect letters
+incorrect_letters: Set[str] = set()
 
 def load_results():
     """Loads previous game results from RESULTS_FILE."""
@@ -63,6 +72,9 @@ async def handle_auth(success: bool) -> None:
 def handle_init(data: Dict[str, Any]) -> None:
     """Handles game initialization."""
     logger.info("New game initialized!")
+    reset_dynamic_data()
+    global incorrect_letters
+    incorrect_letters = set()  # Reset incorrect letters at the start of a new game
 
 def handle_result(data: Dict[str, Any]) -> None:
     """Handles the end of the game."""
@@ -140,16 +152,11 @@ def handle_result(data: Dict[str, Any]) -> None:
         else:
             logger.debug(f"The word '{final_word}' is already in the word list.")
 
+    # Adjust weights based on game result
+    handle_game_result(bot_won)
+
 async def handle_round(data: Dict[str, Any]) -> str:
-    """
-    Handles each round by selecting the next best letter to guess.
-
-    Args:
-        data (Dict[str, Any]): The data dictionary containing round information.
-
-    Returns:
-        str: The next letter to guess.
-    """
+    global incorrect_letters
     try:
         round_data: RoundDataDTO = DataDTOFactory.create_dto(
             data['type'],
@@ -161,7 +168,11 @@ async def handle_round(data: Dict[str, Any]) -> str:
         )
         logger.info(f"Round data received: Word state '{round_data.word}', Guessed letters {round_data.guessed}")
 
-        next_letter = get_next_letter(round_data.word, round_data.guessed)
+        # Update incorrect letters
+        current_word_letters = set(round_data.word.replace('_', ''))
+        incorrect_letters = set(letter for letter in round_data.guessed if letter not in current_word_letters)
+
+        next_letter = get_next_letter(round_data.word, round_data.guessed, incorrect_letters)
         if next_letter is None:
             logger.error("No valid letters left to guess.")
             # Select a random unguessed letter to avoid invalid move

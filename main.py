@@ -19,6 +19,7 @@ sio = socketio.AsyncClient()
 # Global statistics variables
 total_games = 0
 total_wins = 0
+total_new_words_added = 0  # New variable to track words added to the word list
 error_counts_per_word_length = {}  # key: word_length, value: {'errors': total_errors, 'games': num_games}
 total_time = 0
 total_turns = 0
@@ -30,9 +31,10 @@ turn_times = []
 def load_results():
     """Loads previous game results from RESULTS_FILE."""
     global total_games, total_wins, error_counts_per_word_length
-    global total_time, total_turns
+    global total_time, total_turns, total_new_words_added
     total_time = 0
     total_turns = 0
+    total_new_words_added = 0
     try:
         with open(RESULTS_FILE, 'r', encoding='utf-8') as f:
             for line in f:
@@ -40,12 +42,12 @@ def load_results():
                 if not line:
                     continue
                 # Parse the line
-                # Expected format: 'win,word_length,error_count,total_time,num_turns'
+                # Expected format: 'win,word_length,error_count,total_time,num_turns,word_added'
                 parts = line.split(',')
-                if len(parts) != 5:
+                if len(parts) != 6:
                     logger.warning(f"Invalid line in results file: {line}")
                     continue
-                result, word_length_str, error_count_str, total_time_str, num_turns_str = parts
+                result, word_length_str, error_count_str, total_time_str, num_turns_str, word_added = parts
                 word_length = int(word_length_str)
                 error_count = int(error_count_str)
                 total_time_game = float(total_time_str)
@@ -59,6 +61,8 @@ def load_results():
                 error_counts_per_word_length[word_length]['games'] += 1
                 total_time += total_time_game
                 total_turns += num_turns_game
+                if word_added == 'yes':
+                    total_new_words_added += 1
         logger.info(f"Loaded previous results: {total_games} games, {total_wins} wins.")
     except FileNotFoundError:
         logger.info("Results file not found. Starting fresh statistics.")
@@ -92,6 +96,7 @@ def handle_result(data: Dict[str, Any]) -> None:
     logger.info("Game over!")
 
     global total_games, total_wins, error_counts_per_word_length, total_time, total_turns, turn_times
+    global total_new_words_added
 
     # Initialize variables
     winners = []
@@ -146,11 +151,21 @@ def handle_result(data: Dict[str, Any]) -> None:
 
     logger.info(f"Average time per turn: {avg_time_per_turn:.2f} seconds")
 
+    # Check if the word was added to the word list
+    word_added = 'no'
+    if final_word:
+        if final_word not in word_list:
+            add_word(final_word)
+            total_new_words_added += 1  # Increment the counter
+            word_added = 'yes'
+        else:
+            logger.debug(f"The word '{final_word}' is already in the word list.")
+
     # Save the result to RESULTS_FILE
     try:
         with open(RESULTS_FILE, 'a', encoding='utf-8') as f:
             result = 'win' if bot_won else 'loss'
-            f.write(f"{result},{word_length},{your_score},{game_total_time},{game_num_turns}\n")
+            f.write(f"{result},{word_length},{your_score},{game_total_time},{game_num_turns},{word_added}\n")
     except Exception as e:
         logger.error(f"Error writing to results file: {e}")
 
@@ -169,13 +184,6 @@ def handle_result(data: Dict[str, Any]) -> None:
         games = error_counts_per_word_length[wl]['games']
         avg_errors = errors / games if games > 0 else 0
         logger.info(f"  Word Length {wl}: Average Errors {avg_errors:.2f} over {games} game(s)")
-
-    # Add the word to the word list if not already there
-    if final_word:
-        if final_word not in word_list:
-            add_word(final_word)
-        else:
-            logger.debug(f"The word '{final_word}' is already in the word list.")
 
     # Adjust weights based on game result
     handle_game_result(bot_won)

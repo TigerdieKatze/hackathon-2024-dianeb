@@ -13,6 +13,7 @@ def index():
     total_wins = 0
     total_time = 0
     total_turns = 0
+    total_new_words_added = 0  # New variable to track words added to the word list
     error_counts_per_word_length = defaultdict(lambda: {'errors': 0, 'games': 0})
 
     try:
@@ -23,9 +24,9 @@ def index():
                     continue
                 # Parse the line
                 parts = line.split(',')
-                if len(parts) != 5:
+                if len(parts) != 6:
                     continue
-                result, word_length_str, error_count_str, total_time_str, num_turns_str = parts
+                result, word_length_str, error_count_str, total_time_str, num_turns_str, word_added = parts
                 word_length = int(word_length_str)
                 error_count = int(error_count_str)
                 game_total_time = float(total_time_str)
@@ -37,6 +38,8 @@ def index():
                 error_counts_per_word_length[word_length]['games'] += 1
                 total_time += game_total_time
                 total_turns += game_num_turns
+                if word_added == 'yes':
+                    total_new_words_added += 1  # Increment the counter
 
     except FileNotFoundError:
         return "Results file not found. No statistics to display."
@@ -45,7 +48,7 @@ def index():
 
     win_percentage = (total_wins / total_games * 100) if total_games > 0 else 0
     avg_time_per_turn = (total_time / total_turns) if total_turns > 0 else 0
-    avg_errors = sum(data['errors'] for data in error_counts_per_word_length.values()) / total_games
+    avg_errors = sum(data['errors'] for data in error_counts_per_word_length.values()) / total_games if total_games > 0 else 0
 
     stats = {
         'total_games': total_games,
@@ -53,7 +56,8 @@ def index():
         'win_percentage': win_percentage,
         'avg_time_per_turn': avg_time_per_turn,
         'error_counts_per_word_length': dict(error_counts_per_word_length),
-        'avg_errors': avg_errors
+        'avg_errors': avg_errors,
+        'total_new_words_added': total_new_words_added  # Pass the new statistic to the template
     }
 
     return render_template('index.html', stats=stats)

@@ -4,13 +4,9 @@ import logging
 from logging.handlers import RotatingFileHandler
 
 DATA_DIR = './data'
-LOG_DIR = os.path.join(DATA_DIR, './logs')
 CONFIG_DIR = './config'
-CONFIG_FILE = os.path.join(CONFIG_DIR, 'config.json')
-LOG_FILE = os.path.join(LOG_DIR, 'bot.log')
-WORD_LIST_FILE = os.path.join(DATA_DIR, 'wordlist.txt')
-RESULTS_FILE = os.path.join(DATA_DIR, 'results.txt')
-DYNAMIC_DATA_FILE = os.path.join(DATA_DIR, 'dynamic_data.json')
+PKL_DIR = './pkls'
+
 
 IsInDockerContainer = os.environ.get('AM_I_IN_A_DOCKER_CONTAINER', False)
 IsFarmBot = os.environ.get('Farm', False)
@@ -18,12 +14,18 @@ IsFarmBot = os.environ.get('Farm', False)
 if IsInDockerContainer:
     DATA_DIR = '/app/data'
     CONFIG_DIR = '/app/config'
-    CONFIG_FILE = os.path.join(CONFIG_DIR, 'config.json')
-    LOG_DIR = os.path.join(DATA_DIR, 'logs')
-    LOG_FILE = os.path.join(LOG_DIR, 'bot.log')
-    WORD_LIST_FILE = os.path.join(DATA_DIR, 'wordlist.txt')
-    RESULTS_FILE = os.path.join(DATA_DIR, 'results.txt')
-    DYNAMIC_DATA_FILE = os.path.join(DATA_DIR, 'dynamic_data.json')
+    PKL_DIR = '/app/pkls'
+
+LOG_DIR = os.path.join(DATA_DIR, 'logs')
+CONFIG_FILE = os.path.join(CONFIG_DIR, 'config.json')
+LOG_FILE = os.path.join(LOG_DIR, 'bot.log')
+WORD_LIST_FILE = os.path.join(DATA_DIR, 'wordlist.txt')
+RESULTS_FILE = os.path.join(DATA_DIR, 'results.txt')
+DYNAMIC_DATA_FILE = os.path.join(DATA_DIR, 'dynamic_data.json')
+SINGLE_LETTER_FREQ_FILE = os.path.join(PKL_DIR, 'single_letter_freq.pkl')
+PAIR_LETTER_FREQ_FILE = os.path.join(PKL_DIR, 'pair_letter_freq.pkl')
+OVERALL_LETTER_FREQ_FILE = os.path.join(PKL_DIR, 'overall_letter_freq.pkl')
+CLEAN_WORDLIST_FILE = os.path.join(PKL_DIR, 'clean_wordlist.pkl')
 
 def load_config():
     with open(CONFIG_FILE, 'r') as f:

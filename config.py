@@ -3,8 +3,9 @@ import json
 import logging
 from logging.handlers import RotatingFileHandler
 
-DATA_DIR = '/app/data'
-LOG_DIR = os.path.join(DATA_DIR, 'logs')
+DATA_DIR = './data'
+LOG_DIR = os.path.join(DATA_DIR, './logs')
+CONFIG_DIR = './config'
 LOG_FILE = os.path.join(LOG_DIR, 'bot.log')
 WORD_LIST_FILE = os.path.join(DATA_DIR, 'wordlist.txt')
 RESULTS_FILE = os.path.join(DATA_DIR, 'results.txt')
@@ -13,7 +14,13 @@ CONFIG_FILE = './config.json'
 IsInDockerContainer = os.environ.get('AM_I_IN_A_DOCKER_CONTAINER', False)
 
 if IsInDockerContainer:
-    CONFIG_FILE = '/app/config/config.json'
+    DATA_DIR = '/app/data'
+    CONFIG_DIR = '/app/config'
+    CONFIG_FILE = os.path.join(CONFIG_DIR, 'config.json')
+    LOG_DIR = os.path.join(DATA_DIR, 'logs')
+    LOG_FILE = os.path.join(LOG_DIR, 'bot.log')
+    WORD_LIST_FILE = os.path.join(DATA_DIR, 'wordlist.txt')
+    RESULTS_FILE = os.path.join(DATA_DIR, 'results.txt')
 
 def load_config():
     with open(CONFIG_FILE, 'r') as f:

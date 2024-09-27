@@ -19,7 +19,6 @@ RUN pip install --no-cache-dir -r requirements-web.txt
 
 # Copy project files
 COPY webapp.py .
-COPY templates/ ./templates/
 
 # Expose port
 EXPOSE 5000

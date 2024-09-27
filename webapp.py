@@ -1,67 +1,88 @@
-from flask import Flask, render_template
+from flask import Flask, jsonify
+from flask_cors import CORS
 import os
-from collections import defaultdict
 
 app = Flask(__name__)
+CORS(app)
 
-DATA_DIR = '/app/data'
-RESULTS_FILE = os.path.join(DATA_DIR, 'results.txt')
+@app.route('/api/stats', methods=['GET'])
+def get_stats():
+    DATA_DIR = os.getcwd()
+    RESULTS_FILE = os.path.join(DATA_DIR, 'data', 'results.txt')
 
-@app.route('/')
-def index():
     total_games = 0
     total_wins = 0
-    total_time = 0
+    total_time = 0.0
     total_turns = 0
-    total_new_words_added = 0  # New variable to track words added to the word list
-    error_counts_per_word_length = defaultdict(lambda: {'errors': 0, 'games': 0})
+    total_new_words_added = 0
+    error_counts_per_word_length = {}
 
     try:
-        with open(RESULTS_FILE, 'r', encoding='utf-8') as f:
-            for line in f:
+        with open(RESULTS_FILE, 'r', encoding='utf-8') as file:
+            for line in file:
                 line = line.strip()
                 if not line:
-                    continue
-                # Parse the line
-                # Expected format: 'win,word_length,error_count,total_time,num_turns,word_added'
+                    continue  # Skip empty lines
+
                 parts = line.split(',')
                 if len(parts) != 6:
+                    # Optionally handle malformed lines
                     continue
+
                 result, word_length_str, error_count_str, total_time_str, num_turns_str, word_added = parts
-                word_length = int(word_length_str)
-                error_count = int(error_count_str)
-                game_total_time = float(total_time_str)
-                num_turns_game = int(num_turns_str)
+
+                try:
+                    word_length = int(word_length_str)
+                    error_count = int(error_count_str)
+                    game_total_time = float(total_time_str)
+                    num_turns_game = int(num_turns_str)
+                except ValueError:
+                    # Skip lines with invalid numerical values
+                    continue
+
                 total_games += 1
-                if result == 'win':
+                if result.lower() == 'win':
                     total_wins += 1
+
+                if word_length not in error_counts_per_word_length:
+                    error_counts_per_word_length[word_length] = {'errors': 0, 'games': 0}
+
                 error_counts_per_word_length[word_length]['errors'] += error_count
                 error_counts_per_word_length[word_length]['games'] += 1
+
                 total_time += game_total_time
                 total_turns += num_turns_game
-                if word_added == 'yes':
-                    total_new_words_added += 1  # Increment the counter
+
+                if word_added.lower() == 'yes':
+                    total_new_words_added += 1
+
+        # Calculate statistics
+        win_percentage = (total_wins / total_games) * 100 if total_games > 0 else 0
+        avg_time_per_turn = (total_time / total_turns) if total_turns > 0 else 0
+        total_errors = sum(v['errors'] for v in error_counts_per_word_length.values())
+        avg_errors = (total_errors / total_games) if total_games > 0 else 0
+
+        # Convert keys of error_counts_per_word_length to strings for JSON compatibility
+        error_counts_per_word_length_str_keys = {str(k): v for k, v in error_counts_per_word_length.items()}
+
+        response = {
+            'total_games': total_games,
+            'total_wins': total_wins,
+            'win_percentage': win_percentage,
+            'avg_time_per_turn': avg_time_per_turn,
+            'avg_errors': avg_errors,
+            'total_new_words_added': total_new_words_added,
+            'error_counts_per_word_length': error_counts_per_word_length_str_keys
+        }
+
+        return jsonify(response), 200
 
     except FileNotFoundError:
-        return "Results file not found. No statistics to display."
+        return jsonify({'error': 'Results file not found'}), 500
     except Exception as e:
-        return f"Error reading results file: {e}"
-
-    win_percentage = (total_wins / total_games * 100) if total_games > 0 else 0
-    avg_time_per_turn = (total_time / total_turns) if total_turns > 0 else 0
-    avg_errors = sum(data['errors'] for data in error_counts_per_word_length.values()) / total_games if total_games > 0 else 0
-
-    stats = {
-        'total_games': total_games,
-        'total_wins': total_wins,
-        'win_percentage': win_percentage,
-        'avg_time_per_turn': avg_time_per_turn,
-        'error_counts_per_word_length': dict(error_counts_per_word_length),
-        'avg_errors': avg_errors,
-        'total_new_words_added': total_new_words_added  # Pass the new statistic to the template
-    }
-
-    return render_template('index.html', stats=stats)
+        print(f'Error reading results file: {e}')
+        return jsonify({'error': 'Failed to read results file'}), 500
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000)
+    # Run the Flask app on port 5000 by default
+    app.run(host='0.0.0.0', port=5000, debug=True)

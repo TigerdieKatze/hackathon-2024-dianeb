@@ -1,4 +1,5 @@
 import time
+import re
 from collections import Counter
 from typing import List, Dict, Set
 from config import IsFarmBot, logger, WORD_LIST_FILE, DYNAMIC_DATA_FILE
@@ -99,50 +100,54 @@ def save_dynamic_data():
 load_clean_wordlist()
 load_precomputed_frequencies()
 
-def filter_word(word: str, word_state: str, incorrect_letters: Set[str]) -> bool:
+def build_regex_pattern(word_state: str) -> re.Pattern:
     """
-    Checks if a word matches the current word_state and doesn't contain any incorrect letters.
+    Builds a regex pattern from the word_state.
+    '_' is replaced with '.', and known letters are escaped.
+    The pattern is compiled for faster matching.
     """
-    if len(word) != len(word_state):
+    # Replace '_' with '.', escape other characters
+    word_state_regex = ''.join(['.' if c == '_' else re.escape(c) for c in word_state.upper()])
+    # Since word length is unknown, allow any number of characters before and after
+    pattern = f".*{word_state_regex}.*"  # Match the entire word
+    regex = re.compile(pattern)
+    return regex
+
+def filter_word(word: str, regex: re.Pattern, incorrect_letters: Set[str]) -> bool:
+    """
+    Checks if a word matches the regex pattern and doesn't contain any incorrect letters.
+    """
+    if not regex.match(word):
         return False
-    for wc, sc in zip(word, word_state):
-        if sc == '_':
-            if wc in incorrect_letters:
-                return False
-        else:
-            if wc != sc:
-                return False
+    if set(word).intersection(incorrect_letters):
+        return False
     return True
 
-def get_possible_words(word_state: str, guessed_letters: List[str], incorrect_letters: Set[str]) -> List[str]:
+async def get_possible_words(word_state: str, guessed_letters: List[str], incorrect_letters: Set[str]) -> List[str]:
     """
     Filters the word_list to find all possible words that match the current word_state.
     Utilizes multithreading for efficient processing.
     """
     start_time = time.time()
-    word_state = word_state.upper()
+    regex = build_regex_pattern(word_state)
     incorrect_letters = set(letter.upper() for letter in incorrect_letters)
-    guessed_letters_set = set(letter.upper() for letter in guessed_letters)
-
+    
     possible_words = []
-    num_threads = 8  # Adjust based on your CPU cores
+    num_threads = 14  # Adjust based on your CPU cores
 
     def worker(words_chunk):
         matched = []
         for word in words_chunk:
-            if filter_word(word, word_state, incorrect_letters):
+            if filter_word(word, regex, incorrect_letters):
                 matched.append(word)
         return matched
 
     with ThreadPoolExecutor(max_workers=num_threads) as executor:
-        chunk_size = len(word_list) // num_threads
+        chunk_size = max(len(word_list) // num_threads, 1)
         futures = []
         for i in range(num_threads):
             start = i * chunk_size
-            if i == num_threads - 1:
-                end = len(word_list)
-            else:
-                end = (i + 1) * chunk_size
+            end = (i + 1) * chunk_size if i != num_threads - 1 else len(word_list)
             futures.append(executor.submit(worker, word_list[start:end]))
         for future in as_completed(futures):
             possible_words.extend(future.result())
@@ -150,7 +155,7 @@ def get_possible_words(word_state: str, guessed_letters: List[str], incorrect_le
     logger.info(f"Filtered possible words in {time.time() - start_time:.4f} seconds. {len(possible_words)} words found.")
     return possible_words
 
-def compute_letter_frequencies(possible_words: List[str], guessed_letters_set: Set[str]) -> Dict[str, int]:
+async def compute_letter_frequencies(possible_words: List[str], guessed_letters_set: Set[str]) -> Dict[str, int]:
     """
     Computes the frequency of each letter in the possible_words.
     Utilizes multithreading for efficient processing.
@@ -158,7 +163,7 @@ def compute_letter_frequencies(possible_words: List[str], guessed_letters_set: S
     """
     start_time = time.time()
     letter_counts = Counter()
-    num_threads = 8  # Adjust based on your CPU cores
+    num_threads = 14  # Adjust based on your CPU cores
 
     def worker(words_chunk):
         local_counter = Counter()
@@ -168,14 +173,11 @@ def compute_letter_frequencies(possible_words: List[str], guessed_letters_set: S
         return local_counter
 
     with ThreadPoolExecutor(max_workers=num_threads) as executor:
-        chunk_size = len(possible_words) // num_threads
+        chunk_size = max(len(possible_words) // num_threads, 1)
         futures = []
         for i in range(num_threads):
             start = i * chunk_size
-            if i == num_threads - 1:
-                end = len(possible_words)
-            else:
-                end = (i + 1) * chunk_size
+            end = (i + 1) * chunk_size if i != num_threads - 1 else len(possible_words)
             futures.append(executor.submit(worker, possible_words[start:end]))
         for future in as_completed(futures):
             letter_counts.update(future.result())
@@ -183,25 +185,90 @@ def compute_letter_frequencies(possible_words: List[str], guessed_letters_set: S
     logger.info(f"Computed letter frequencies in {time.time() - start_time:.4f} seconds.")
     return dict(letter_counts)
 
-def get_next_letter(word_state: str, guessed_letters: List[str], incorrect_letters: Set[str]) -> str:
+# Define all uppercase English letters
+all_letters = set('ABCDEFGHIJKLMNOPQRSTUVWXYZ')
+    
+# Define German letter frequencies
+german_letter_freq = {
+    'E': 17.40,
+    'N': 9.78,
+    'I': 7.55,
+    'S': 7.27,
+    'R': 7.00,
+    'A': 6.51,
+    'T': 6.15,
+    'D': 5.08,
+    'H': 4.76,
+    'U': 4.35,
+    'L': 3.44,
+    'C': 3.06,
+    'G': 3.01,
+    'M': 2.53,
+    'O': 2.51,
+    'B': 1.89,
+    'W': 1.89,
+    'F': 1.66,
+    'K': 1.21,
+    'Z': 1.13,
+    'P': 0.79,
+    'V': 0.67,
+    'J': 0.27,
+    'Y': 0.04,
+    'X': 0.03,
+    'Q': 0.02
+}
+
+async def get_next_letter(word_state: str, guessed_letters: List[str], incorrect_letters: Set[str]) -> str:
     start_time = time.time()
 
     # Always guess 'E' first if it hasn't been guessed yet
-    if 'E' not in guessed_letters:
+    if 'E' not in (letter.upper() for letter in guessed_letters):
         logger.info("Guessing 'E' as it is the most common German letter.")
         return 'E'
 
-    possible_words = get_possible_words(word_state, guessed_letters, incorrect_letters)
-    if not possible_words:
-        logger.warning("No possible words found. Guessing a random unguessed letter 'A'.")
-        return 'A'  # Fallback to 'A' if no words are possible
-
     guessed_letters_set = set(letter.upper() for letter in guessed_letters)
-    letter_frequencies = compute_letter_frequencies(possible_words, guessed_letters_set)
+    possible_words = await get_possible_words(word_state, guessed_letters, incorrect_letters)
+    if not possible_words:
+        logger.warning("No possible words computed.")
+    
+        # Determine unguessed letters
+        unguessed_letters = all_letters - guessed_letters_set
+    
+        if unguessed_letters:
+            # Sort unguessed letters by German frequency
+            sorted_unguessed = sorted(
+                unguessed_letters,
+                key=lambda letter: german_letter_freq.get(letter, 0),
+                reverse=True
+            )
+            first_guess = sorted_unguessed[0]
+            logger.warning(f"Guessing the first unguessed letter: {first_guess}")
+            return first_guess
+        else:
+            logger.warning("No unguessed letters remaining.")
+            return None  # Or handle this case as needed
+
+    letter_frequencies = await compute_letter_frequencies(possible_words, guessed_letters_set)
 
     if not letter_frequencies:
-        logger.warning("No letter frequencies found. Guessing a random unguessed letter 'A'.")
-        return 'A'
+        logger.warning("No letter frequencies computed.")
+    
+        # Determine unguessed letters
+        unguessed_letters = all_letters - guessed_letters_set
+    
+        if unguessed_letters:
+            # Sort unguessed letters by German frequency
+            sorted_unguessed = sorted(
+                unguessed_letters,
+                key=lambda letter: german_letter_freq.get(letter, 0),
+                reverse=True
+            )
+            first_guess = sorted_unguessed[0]
+            logger.warning(f"Guessing the first unguessed letter: {first_guess}")
+            return first_guess
+        else:
+            logger.warning("No unguessed letters remaining.")
+            return None  # Or handle this case as needed
 
     # Find the letter with the highest frequency
     next_letter = max(letter_frequencies, key=letter_frequencies.get)

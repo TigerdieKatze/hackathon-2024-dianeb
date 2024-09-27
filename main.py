@@ -153,7 +153,6 @@ def handle_result(data: Dict[str, Any]) -> None:
     # Check if the word was added to the word list
     word_added = 'no'
     if final_word:
-        # Assuming wordlist is already preprocessed and cleaned
         # Uncomment the following line if you want to add new words
         # if final_word not in word_list:
         if False:  # Set to True if adding words is desired
@@ -219,7 +218,7 @@ async def handle_round(data: Dict[str, Any]) -> str:
         current_word_letters = set(round_data.word.replace('_', ''))
         incorrect_letters = set(letter for letter in round_data.guessed if letter not in current_word_letters)
 
-        next_letter = get_next_letter(round_data.word, round_data.guessed, incorrect_letters)
+        next_letter = await get_next_letter(round_data.word, round_data.guessed, incorrect_letters)
         if next_letter is None:
             logger.error("No valid letters left to guess.")
             # Select a random unguessed letter to avoid invalid move

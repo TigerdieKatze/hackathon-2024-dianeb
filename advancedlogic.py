@@ -1,12 +1,10 @@
 import re
-from collections import Counter, defaultdict
+from collections import Counter
 from typing import List, Dict, Set
-from config import logger, WORD_LIST_FILE
+from config import logger, WORD_LIST_FILE, DYNAMIC_DATA_FILE
 import json
 import os
-
-# Path for storing dynamic weights
-DYNAMIC_DATA_FILE = os.path.join('./data', 'dynamic_data.json')
+import fcntl  # Import for file-based locking
 
 # Load and process the word list
 def load_word_list(file_path: str) -> List[str]:
@@ -42,36 +40,8 @@ def compute_letter_frequencies(words: List[str]) -> Dict[str, float]:
     letter_frequencies = {letter: count / total_letters for letter, count in letter_counts.items()}
     return letter_frequencies
 
-def compute_positional_letter_frequencies(words: List[str]) -> List[Dict[str, float]]:
-    max_length = max(len(word) for word in words)
-    position_counts = [Counter() for _ in range(max_length)]
-    total_counts = [0] * max_length
-    for word in words:
-        for i, letter in enumerate(word):
-            position_counts[i][letter] += 1
-            total_counts[i] += 1
-    position_frequencies = []
-    for i in range(max_length):
-        position_frequencies.append({letter: count / total_counts[i] for letter, count in position_counts[i].items()})
-    return position_frequencies
-
-def compute_ngram_frequencies(words: List[str], n: int) -> Dict[str, float]:
-    ngram_counts = Counter()
-    total_ngrams = 0
-    for word in words:
-        word = f"{' ' * (n - 1)}{word}{' ' * (n - 1)}"  # Pad the word with spaces
-        for i in range(len(word) - n + 1):
-            ngram = word[i:i + n]
-            ngram_counts[ngram] += 1
-            total_ngrams += 1
-    ngram_frequencies = {ngram: count / total_ngrams for ngram, count in ngram_counts.items()}
-    return ngram_frequencies
-
 # Precompute frequencies
 letter_frequencies = compute_letter_frequencies(word_list)
-positional_letter_frequencies = compute_positional_letter_frequencies(word_list)
-bigram_frequencies = compute_ngram_frequencies(word_list, 2)
-trigram_frequencies = compute_ngram_frequencies(word_list, 3)
 
 # Load dynamic data (weights)
 def load_dynamic_data():
@@ -95,8 +65,13 @@ dynamic_data = load_dynamic_data()
 # Function to save dynamic data
 def save_dynamic_data():
     try:
+        # Use file-based locking
         with open(DYNAMIC_DATA_FILE, 'w', encoding='utf-8') as f:
+            fcntl.flock(f, fcntl.LOCK_EX)
             json.dump(dynamic_data, f)
+            f.flush()
+            os.fsync(f.fileno())
+            fcntl.flock(f, fcntl.LOCK_UN)
     except Exception as e:
         logger.error(f"Error saving dynamic data: {e}")
 
@@ -121,63 +96,15 @@ def get_next_letter(word_state: str, guessed_letters: List[str], incorrect_lette
     ]
 
     if matching_words:
-        # Initialize scores for each unguessed letter
-        letter_scores = defaultdict(float)
-
+        # Compute letter frequencies among matching words
+        letter_counts = Counter()
         for word in matching_words:
-            for i, letter in enumerate(word):
-                if word_state[i] == '_' and letter not in guessed_letters:
-                    # Positional frequency score
-                    position_freq = positional_letter_frequencies[i].get(letter, 0)
-
-                    # N-gram frequency score
-                    ngram_score = 0
-                    # Bigram (n=2)
-                    if i > 0:
-                        bigram = word[i - 1] + letter
-                        ngram_score += bigram_frequencies.get(bigram, 0)
-                    if i < len(word_state) - 1 and word_state[i + 1] != '_':
-                        bigram = letter + word_state[i + 1]
-                        ngram_score += bigram_frequencies.get(bigram, 0)
-                    # Trigram (n=3)
-                    if i > 1:
-                        trigram = word[i - 2] + word[i - 1] + letter
-                        ngram_score += trigram_frequencies.get(trigram, 0)
-                    if i < len(word_state) - 2 and word_state[i + 1] != '_' and word_state[i + 2] != '_':
-                        trigram = letter + word_state[i + 1] + word_state[i + 2]
-                        ngram_score += trigram_frequencies.get(trigram, 0)
-
-                    # Morphological analysis (prefixes and suffixes)
-                    morphological_score = 0
-                    common_prefixes = ['UN', 'VER', 'BE', 'ENT', 'ER']
-                    common_suffixes = ['EN', 'UNG', 'ER', 'CHEN', 'LICH']
-                    if i == 0 and ''.join(word[:3]) in common_prefixes:
-                        morphological_score += 0.1
-                    if i >= len(word) - 3 and ''.join(word[-3:]) in common_suffixes:
-                        morphological_score += 0.1
-
-                    # Overall letter frequency score
-                    letter_freq = letter_frequencies.get(letter, 0)
-
-                    # Dynamic weights
-                    weights = dynamic_data.get('weights', {})
-                    position_weight = weights.get('position_weight', 0.5)
-                    ngram_weight = weights.get('ngram_weight', 0.3)
-                    letter_weight = weights.get('letter_weight', 0.2)
-
-                    # Weighted sum of scores
-                    total_score = (
-                        position_freq * position_weight +
-                        ngram_score * ngram_weight +
-                        letter_freq * letter_weight +
-                        morphological_score
-                    )
-                    letter_scores[letter] += total_score
-
-        if letter_scores:
-            # Select the letter with the highest cumulative score
-            next_letter = max(letter_scores, key=letter_scores.get)
-            logger.info(f"Selected next letter '{next_letter}' based on advanced scoring system.")
+            unique_letters_in_word = set(word) - guessed_letters
+            letter_counts.update(unique_letters_in_word)
+        if letter_counts:
+            # Select the unguessed letter that appears most frequently
+            next_letter = letter_counts.most_common(1)[0][0]
+            logger.info(f"Selected next letter '{next_letter}' based on frequency among matching words.")
             return next_letter
         else:
             logger.info("All letters in matching words have been guessed.")
@@ -208,38 +135,39 @@ def get_next_letter(word_state: str, guessed_letters: List[str], incorrect_lette
 def add_word(new_word: str) -> None:
     new_word = new_word.strip().upper()
     new_word = new_word.replace('Ä', 'AE').replace('Ö', 'OE').replace('Ü', 'UE').replace('ß', 'SS')
-    if len(new_word) >= 5 and new_word not in word_list:
-        word_list.append(new_word)
-        # Update frequencies with the new word
-        global letter_frequencies, positional_letter_frequencies, bigram_frequencies, trigram_frequencies
-        letter_frequencies = compute_letter_frequencies(word_list)
-        positional_letter_frequencies = compute_positional_letter_frequencies(word_list)
-        bigram_frequencies = compute_ngram_frequencies(word_list, 2)
-        trigram_frequencies = compute_ngram_frequencies(word_list, 3)
-        # Optionally, write back to the file
+    if len(new_word) >= 5:
         try:
-            with open(WORD_LIST_FILE, 'a', encoding='utf-8') as f:
-                f.write('\n' + new_word)
-            logger.info(f"Added new word '{new_word}' to the word list.")
+            # Use file-based locking
+            with open(WORD_LIST_FILE, 'a+', encoding='utf-8') as f:
+                fcntl.flock(f, fcntl.LOCK_EX)
+                f.seek(0)
+                existing_words = set(line.strip().upper() for line in f)
+                if new_word not in existing_words:
+                    f.write('\n' + new_word)
+                    f.flush()
+                    os.fsync(f.fileno())
+                    word_list.append(new_word)
+                    global letter_frequencies
+                    letter_frequencies = compute_letter_frequencies(word_list)
+                    logger.info(f"Added new word '{new_word}' to the word list.")
+                else:
+                    logger.debug(f"Word '{new_word}' is already in the word list.")
+                fcntl.flock(f, fcntl.LOCK_UN)
         except Exception as e:
             logger.error(f"Error adding word to word list: {e}")
     else:
-        logger.debug(f"Word '{new_word}' is already in the word list or too short.")
+        logger.debug(f"Word '{new_word}' is too short.")
 
 # Function to adjust weights based on performance
 def adjust_weights(won: bool):
     weights = dynamic_data.get('weights', {})
     if won:
         # If the bot won, slightly increase the weights
-        weights['position_weight'] = min(weights.get('position_weight', 0.5) + 0.01, 0.7)
-        weights['ngram_weight'] = min(weights.get('ngram_weight', 0.3) + 0.005, 0.5)
+        weights['letter_weight'] = min(weights.get('letter_weight', 0.2) + 0.05, 0.7)
     else:
         # If the bot lost, slightly decrease the weights
-        weights['position_weight'] = max(weights.get('position_weight', 0.5) - 0.01, 0.3)
-        weights['ngram_weight'] = max(weights.get('ngram_weight', 0.3) - 0.005, 0.1)
-    # Ensure the weights sum to 1
-    total = weights['position_weight'] + weights['ngram_weight'] + weights.get('letter_weight', 0.2)
-    weights['letter_weight'] = 1 - (weights['position_weight'] + weights['ngram_weight'])
+        weights['letter_weight'] = max(weights.get('letter_weight', 0.2) - 0.05, 0.1)
+    # Ensure the weight does not exceed bounds
     dynamic_data['weights'] = weights
     save_dynamic_data()
 

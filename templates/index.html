@@ -15,6 +15,8 @@
     <p><strong>Total Games:</strong> {{ stats.total_games }}</p>
     <p><strong>Total Wins:</strong> {{ stats.total_wins }}</p>
     <p><strong>Win Percentage:</strong> {{ "%.2f"|format(stats.win_percentage) }}%</p>
+    <p><strong>Average Time per Turn:</strong> {{ "%.2f"|format(stats.avg_time_per_turn) }} seconds</p>
+    <p><strong>Average Errors:</strong> {{ "%.2f"|format(stats.avg_errors) }}</p>
     <h2>Error Counts per Word Length</h2>
     <table>
         <tr>

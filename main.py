@@ -1,7 +1,7 @@
 import asyncio
 from typing import Any, Dict, Set
 import socketio
-from config import CONFIG, logger, RESULTS_FILE
+from config import SECRET, logger, RESULTS_FILE
 from models import DataDTOFactory, RoundDataDTO
 from advancedlogic import (
     get_next_letter,
@@ -10,8 +10,8 @@ from advancedlogic import (
     handle_game_result,
     reset_dynamic_data,
 )
+import time
 
-SECRET = CONFIG['SECRET']
 SERVER_URL = "https://games.uhno.de"
 
 sio = socketio.AsyncClient()
@@ -20,13 +20,19 @@ sio = socketio.AsyncClient()
 total_games = 0
 total_wins = 0
 error_counts_per_word_length = {}  # key: word_length, value: {'errors': total_errors, 'games': num_games}
+total_time = 0
+total_turns = 0
 
 # Global variable for incorrect letters
 incorrect_letters: Set[str] = set()
+turn_times = []
 
 def load_results():
     """Loads previous game results from RESULTS_FILE."""
     global total_games, total_wins, error_counts_per_word_length
+    global total_time, total_turns
+    total_time = 0
+    total_turns = 0
     try:
         with open(RESULTS_FILE, 'r', encoding='utf-8') as f:
             for line in f:
@@ -34,14 +40,16 @@ def load_results():
                 if not line:
                     continue
                 # Parse the line
-                # Expected format: 'win,word_length,error_count'
+                # Expected format: 'win,word_length,error_count,total_time,num_turns'
                 parts = line.split(',')
-                if len(parts) != 3:
+                if len(parts) != 5:
                     logger.warning(f"Invalid line in results file: {line}")
                     continue
-                result, word_length_str, error_count_str = parts
+                result, word_length_str, error_count_str, total_time_str, num_turns_str = parts
                 word_length = int(word_length_str)
                 error_count = int(error_count_str)
+                total_time_game = float(total_time_str)
+                num_turns_game = int(num_turns_str)
                 total_games += 1
                 if result == 'win':
                     total_wins += 1
@@ -49,6 +57,8 @@ def load_results():
                     error_counts_per_word_length[word_length] = {'errors': 0, 'games': 0}
                 error_counts_per_word_length[word_length]['errors'] += error_count
                 error_counts_per_word_length[word_length]['games'] += 1
+                total_time += total_time_game
+                total_turns += num_turns_game
         logger.info(f"Loaded previous results: {total_games} games, {total_wins} wins.")
     except FileNotFoundError:
         logger.info("Results file not found. Starting fresh statistics.")
@@ -73,14 +83,15 @@ def handle_init(data: Dict[str, Any]) -> None:
     """Handles game initialization."""
     logger.info("New game initialized!")
     reset_dynamic_data()
-    global incorrect_letters
+    global incorrect_letters, turn_times
     incorrect_letters = set()  # Reset incorrect letters at the start of a new game
+    turn_times = []  # Reset turn times
 
 def handle_result(data: Dict[str, Any]) -> None:
     """Handles the end of the game."""
     logger.info("Game over!")
 
-    global total_games, total_wins, error_counts_per_word_length
+    global total_games, total_wins, error_counts_per_word_length, total_time, total_turns, turn_times
 
     # Initialize variables
     winners = []
@@ -125,13 +136,27 @@ def handle_result(data: Dict[str, Any]) -> None:
     error_counts_per_word_length[word_length]['errors'] += your_score
     error_counts_per_word_length[word_length]['games'] += 1
 
+    # Compute total time and number of turns
+    game_total_time = sum(turn_times)
+    game_num_turns = len(turn_times)
+    if game_num_turns > 0:
+        avg_time_per_turn = game_total_time / game_num_turns
+    else:
+        avg_time_per_turn = 0
+
+    logger.info(f"Average time per turn: {avg_time_per_turn:.2f} seconds")
+
     # Save the result to RESULTS_FILE
     try:
         with open(RESULTS_FILE, 'a', encoding='utf-8') as f:
             result = 'win' if bot_won else 'loss'
-            f.write(f"{result},{word_length},{your_score}\n")
+            f.write(f"{result},{word_length},{your_score},{game_total_time},{game_num_turns}\n")
     except Exception as e:
         logger.error(f"Error writing to results file: {e}")
+
+    # Update global totals
+    total_time += game_total_time
+    total_turns += game_num_turns
 
     # Compute win percentage
     win_percentage = (total_wins / total_games) * 100
@@ -155,8 +180,12 @@ def handle_result(data: Dict[str, Any]) -> None:
     # Adjust weights based on game result
     handle_game_result(bot_won)
 
+    # Reset turn_times for the next game
+    turn_times = []
+
 async def handle_round(data: Dict[str, Any]) -> str:
-    global incorrect_letters
+    global incorrect_letters, turn_times
+    start_time = time.time()
     try:
         round_data: RoundDataDTO = DataDTOFactory.create_dto(
             data['type'],
@@ -192,6 +221,9 @@ async def handle_round(data: Dict[str, Any]) -> str:
         logger.error(f"Error in handle_round: {e}")
         # Return a default letter to avoid making an invalid move
         return 'E'
+    finally:
+        end_time = time.time()
+        turn_times.append(end_time - start_time)
 
 handlers = {
     'INIT': handle_init,

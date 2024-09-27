@@ -1,8 +1,7 @@
 import asyncio
 from typing import Any, Dict, Set, List
-
 import socketio
-from config import CONFIG
+from config import CONFIG, logger
 from models import DataDTOFactory, RoundDataDTO
 from randomLogic import get_next_letter
 
@@ -14,26 +13,37 @@ sio = socketio.AsyncClient()
 @sio.event
 async def connect() -> None:
     """Handles the connection event."""
-    print('Connected to the server!')
+    logger.info('Connected to the server!')
     await sio.emit('authenticate', SECRET, callback=handle_auth)
 
 async def handle_auth(success: bool) -> None:
     """Handles authentication response."""
     if success:
-        print("Authentication successful")
+        logger.info("Authentication successful")
     else:
-        print("Authentication failed")
+        logger.info("Authentication failed")
         await sio.disconnect()
 
 def handle_init(data: Dict[str, Any]) -> None:
     """Handles game initialization."""
-    print("New game initialized!")
+    logger.info("New game initialized!")
 
 def handle_result(data: Dict[str, Any]) -> None:
     """Handles the end of the game."""
-    print("Game over!")
-    print(data)
-    # Additional processing can be done here
+    logger.info("Game over!")
+
+    winner = None
+    lowest_score = float('inf')  # Initialize to a very high value
+
+    for player in data['players']:
+        if player['score'] < lowest_score:
+            lowest_score = player['score']
+            winner = player['id']
+
+    if winner == data['self']:
+        logger.info("Your bot won!")
+    else:
+        logger.info(f"Player with ID {winner} won with a score of {lowest_score}")
 
 async def handle_round(data: Dict[str, Any]) -> str:
     """
@@ -53,7 +63,7 @@ async def handle_round(data: Dict[str, Any]) -> str:
         data['word'],
         data['guessed']
     )
-    print(f"Round data received: {round_data.word}")
+    logger.info(f"Round data received: {round_data.word}")
 
     return get_next_letter(round_data)
 
@@ -72,12 +82,12 @@ async def data(data: Dict[str, Any]) -> Any:
         handler = handlers[message_type]
         handler(data)
     else:
-        print("Unknown message type received:", data)
+        logger.error("Unknown message type received:", data)
 
 @sio.event
 async def disconnect() -> None:
     """Handles the disconnection event."""
-    print('Disconnected from the server!')
+    logger.error('Disconnected from the server!')
 
 async def main() -> None:
     """Main function to start the client."""
@@ -88,5 +98,5 @@ if __name__ == '__main__':
     try:
         asyncio.run(main())
     except Exception as e:
-        print(f"Error: {e}")
-        print("Exiting")
+        logger.error(f"Error: {e}")
+        logger.error("Exiting")

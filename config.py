@@ -6,11 +6,12 @@ from logging.handlers import RotatingFileHandler
 DATA_DIR = './data'
 LOG_DIR = os.path.join(DATA_DIR, './logs')
 CONFIG_DIR = './config'
+CONFIG_FILE = os.path.join(CONFIG_DIR, 'config.json')
 LOG_FILE = os.path.join(LOG_DIR, 'bot.log')
 WORD_LIST_FILE = os.path.join(DATA_DIR, 'wordlist.txt')
 RESULTS_FILE = os.path.join(DATA_DIR, 'results.txt')
+DYNAMIC_DATA_FILE = os.path.join(DATA_DIR, 'dynamic_data.json')
 
-CONFIG_FILE = './config.json'
 IsInDockerContainer = os.environ.get('AM_I_IN_A_DOCKER_CONTAINER', False)
 
 if IsInDockerContainer:
@@ -21,12 +22,19 @@ if IsInDockerContainer:
     LOG_FILE = os.path.join(LOG_DIR, 'bot.log')
     WORD_LIST_FILE = os.path.join(DATA_DIR, 'wordlist.txt')
     RESULTS_FILE = os.path.join(DATA_DIR, 'results.txt')
+    DYNAMIC_DATA_FILE = os.path.join(DATA_DIR, 'dynamic_data.json')
 
 def load_config():
     with open(CONFIG_FILE, 'r') as f:
         return json.load(f)
-    
+
 CONFIG = load_config()
+
+# Get SECRET from environment variable
+SECRET = os.environ.get('BOT_SECRET')
+
+if not SECRET:
+    SECRET = CONFIG["SECRET"]
 
 # Ensure directories exist
 os.makedirs(LOG_DIR, exist_ok=True)

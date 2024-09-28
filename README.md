@@ -1,11 +1,11 @@
 # Project Overview
 
-This project is a Python-based bot that interacts with a game server to participate in guessing games. It uses socket.io for communication with the server and includes logic for making strategic guesses based on previous game data.
+This project is a Python-based bot that interacts with a game server to participate in guessing games. It uses `socket.io` for communication with the server and includes logic for making strategic guesses based on previous game data.
 
 ## Prerequisites
 
 - Docker
-- Python 3.9
+- Docker Compose
 
 ## Setup and Configuration
 
@@ -17,16 +17,9 @@ This project is a Python-based bot that interacts with a game server to particip
    cd hackathon2024
    ```
 
-2. **Install dependencies**
+2. **Configuration**
 
-   If running locally, install the required Python packages:
-   ```bash
-   pip install -r requirements.txt
-   ```
-
-3. **Configuration**
-
-   You need to create a `config.json` file with the following structure:
+   Create a `config.json` file with the following structure:
    ```json
    {
        "SECRET": "<YOUR_SECRET>",
@@ -35,46 +28,80 @@ This project is a Python-based bot that interacts with a game server to particip
    ```
    - Replace `<YOUR_SECRET>` with the authentication token for connecting to the game server.
 
-4. **File System Setup**
+3. **File System Setup**
 
    Ensure that the necessary directories are created:
    - `data/`: Stores the wordlist and result logs.
    - `config/`: Contains configuration files like `config.json`.
 
-## Running the Bot Locally
-
-1. Start the bot by running the following command:
-   ```bash
-   python main.py
-   ```
-
 ## Docker Deployment
 
-1. **Build the Docker image**
+This project **must** be deployed via Docker.
 
-   To run the bot in a Docker container, build the Docker image:
+### Building the Docker Images
+
+1. **Bot Docker Image**
+
+   To run the bot in a Docker container, build the Docker image by navigating to the `bot` directory:
    ```bash
-   docker build -t bot .
+   docker build -t your-bot-image-name ./bot/
    ```
 
-2. **Run the bot with Docker Compose**
+2. **Dashboard Docker Image**
 
-   You can run the bot using Docker Compose. Ensure the `docker-compose.yml` file is set up correctly:
+   To build the dashboard for the web interface, navigate to the `dashboard` directory and run:
+   ```bash
+   docker build -t your-dashboard-image-name ./dashboard/
+   ```
+
+### Running with Docker Compose
+
+After building the images, run the following command to deploy both the bot and dashboard containers:
+
+1. Ensure that your `docker-compose.yml` file is correctly set up:
+
    ```yaml
    services:
      bot:
-       build: .
+       build: ./bot/
        volumes:
          - ./data:/app/data
          - ./config:/app/config
+       #enviroment:
+         #- THREADCOUNT=20
+         #- BOT_SECRET=<Secret>
+       restart: unless-stopped
+
+     dashboard:
+       build: ./dashboard/
+       ports:
+         - "127.0.0.1:3000:3000"
        restart: unless-stopped
    ```
+- THREADCOUNT and BOT_SECRET are optional
 
-   Then start the service:
+2. Start the services:
    ```bash
-   docker-compose up
+   docker-compose up -d
    ```
+
+### Accessing the Services
+
+- The bot will be running in the background.
+- The dashboard can be accessed via `http://localhost:3000`.
 
 ## Logging
 
 Logs are written to `data/logs/bot.log`. The log level is configurable via the `config.json` file under the `LOG_LEVEL` key. Available levels are `DEBUG`, `INFO`, `WARNING`, `ERROR`, and `CRITICAL`.
+
+## Additional Docker Commands
+
+- **To stop the services**:
+  ```bash
+  docker-compose down
+  ```
+
+- **To view logs**:
+  ```bash
+  docker-compose logs
+  ```

@@ -68,7 +68,7 @@ After building the images, run the following command to deploy both the bot and 
          - ./data:/app/data
          - ./config:/app/config
        #enviroment:
-         #- THREADCOUNT=18
+         #- THREADCOUNT=20
          #- BOT_SECRET=<Secret>
        restart: unless-stopped
 

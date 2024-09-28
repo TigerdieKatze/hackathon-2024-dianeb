@@ -67,6 +67,9 @@ After building the images, run the following command to deploy both the bot and 
        volumes:
          - ./data:/app/data
          - ./config:/app/config
+       #enviroment:
+         #- THREADCOUNT=18
+         #- BOT_SECRET=<Secret>
        restart: unless-stopped
 
      dashboard:
@@ -75,6 +78,7 @@ After building the images, run the following command to deploy both the bot and 
          - "127.0.0.1:3000:3000"
        restart: unless-stopped
    ```
+- THREADCOUNT and BOT_SECRET are optional
 
 2. Start the services:
    ```bash

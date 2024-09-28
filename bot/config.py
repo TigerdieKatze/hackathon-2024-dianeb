@@ -3,6 +3,10 @@ import json
 import logging
 from logging.handlers import RotatingFileHandler
 
+# Default Thread count
+# WARNING: The Bot uses double the number of threads specified here per instance
+THREADCOUNT = 18
+
 DATA_DIR = './data'
 CONFIG_DIR = './config'
 PKL_DIR = './pkls'
@@ -11,6 +15,7 @@ LIST_DIR = './lists'
 
 IsInDockerContainer = os.environ.get('AM_I_IN_A_DOCKER_CONTAINER', False)
 IsFarmBot = os.environ.get('Farm', False)
+THREADCOUNT = os.environ.get('THREADCOUNT', THREADCOUNT)
 
 if IsInDockerContainer:
     DATA_DIR = '/app/data'

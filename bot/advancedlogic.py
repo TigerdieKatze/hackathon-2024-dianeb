@@ -2,7 +2,7 @@ import time
 import re
 from collections import Counter
 from typing import List, Dict, Set
-from config import logger, SINGLE_LETTER_FREQ_FILE, PAIR_LETTER_FREQ_FILE, OVERALL_LETTER_FREQ_FILE, CLEAN_WORDLIST_FILE
+from config import logger, SINGLE_LETTER_FREQ_FILE, PAIR_LETTER_FREQ_FILE, OVERALL_LETTER_FREQ_FILE, CLEAN_WORDLIST_FILE, THREADCOUNT
 import os
 import pickle
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -97,7 +97,7 @@ async def get_possible_words(word_state: str, guessed_letters: List[str], incorr
     incorrect_letters = set(letter.upper() for letter in incorrect_letters)
     
     possible_words = []
-    num_threads = 14  # Adjust based on your CPU cores
+    num_threads = THREADCOUNT
 
     def worker(words_chunk):
         matched = []
@@ -127,7 +127,7 @@ async def compute_letter_frequencies(possible_words: List[str], guessed_letters_
     """
     start_time = time.time()
     letter_counts = Counter()
-    num_threads = 14  # Adjust based on your CPU cores
+    num_threads = THREADCOUNT
 
     def worker(words_chunk):
         local_counter = Counter()

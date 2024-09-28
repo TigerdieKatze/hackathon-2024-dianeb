@@ -1,3 +1,4 @@
+import asyncio
 import time
 import re
 from collections import Counter
@@ -6,7 +7,13 @@ from config import logger, SINGLE_LETTER_FREQ_FILE, PAIR_LETTER_FREQ_FILE, OVERA
 import os
 import pickle
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from numba import njit
+import numpy as np
+import logging
 
+# Suppress Numba debug logs
+numba_logger = logging.getLogger('numba')
+numba_logger.setLevel(logging.WARNING)
 
 
 # Precomputed letter frequencies loaded from pickle files
@@ -79,7 +86,7 @@ def build_regex_pattern(word_state: str) -> re.Pattern:
     # Replace '_' with '.', escape other characters
     word_state_regex = ''.join(['.' if c == '_' else re.escape(c) for c in word_state.upper()])
     # Since word length is unknown, allow any number of characters before and after
-    pattern = f".*{word_state_regex}.*"  # Match the entire word
+    pattern = f"{word_state_regex}"  # Match the entire word
     regex = re.compile(pattern)
     return regex
 
@@ -87,7 +94,7 @@ def filter_word(word: str, regex: re.Pattern, incorrect_letters: Set[str]) -> bo
     """
     Checks if a word matches the regex pattern and doesn't contain any incorrect letters.
     """
-    if not regex.match(word):
+    if not regex.search(word):
         return False
     if set(word).intersection(incorrect_letters):
         return False
@@ -134,32 +141,97 @@ async def get_possible_words(word_state: str, guessed_letters: List[str], incorr
     logger.info(f"Filtered possible words in {time.time() - start_time:.4f} seconds. {len(possible_words)} words found.")
     return possible_words
 
+@njit
+def letter_freq_worker(words_chunk, guessed_letters_bitmask):
+    """
+    Numba-optimized worker function to compute letter frequencies.
+    
+    Parameters:
+    - words_chunk (np.ndarray): 2D array of ASCII values representing words.
+    - guessed_letters_bitmask (int): Bitmask representing guessed letters.
+    
+    Returns:
+    - np.ndarray: Array of counts for each letter a-z.
+    """
+    local_counter = np.zeros(26, dtype=np.int32)  # For letters a-z
+    
+    num_words, word_length = words_chunk.shape
+    
+    for i in range(num_words):
+        word_bitmask = 0
+        
+        # Create a bitmask for unique letters in the word
+        for j in range(word_length):
+            char = words_chunk[i, j]
+            if char == 0:
+                break  # Reached padding
+            idx = char - 97  # 'a' has ASCII 97
+            if 0 <= idx < 26:
+                word_bitmask |= (1 << idx)
+        
+        # Exclude guessed letters
+        available_bitmask = word_bitmask & (~guessed_letters_bitmask)
+        
+        # Update the counter
+        for k in range(26):
+            if (available_bitmask >> k) & 1:
+                local_counter[k] += 1
+                
+    return local_counter
+
 async def compute_letter_frequencies(possible_words: List[str], guessed_letters_set: Set[str]) -> Dict[str, int]:
     """
     Computes the frequency of each letter in the possible_words.
-    Utilizes multithreading for efficient processing.
+    Utilizes Numba for efficient processing.
     Returns a dictionary with letter frequencies.
     """
     start_time = time.time()
     letter_counts = Counter()
     num_threads = THREADCOUNT
 
-    def worker(words_chunk):
-        local_counter = Counter()
-        for word in words_chunk:
-            unique_letters = set(word) - guessed_letters_set
-            local_counter.update(unique_letters)
-        return local_counter
+    # Initialize with the first 100 words
+    words_subset = possible_words[:100]
 
+    # Preprocess words: convert to lowercase and filter non-alphabetic characters
+    sanitized_words = [''.join(filter(str.isalpha, word.lower())) for word in words_subset]
+
+    # Determine the maximum word length for fixed-length array
+    max_length = max(len(word) for word in sanitized_words) if sanitized_words else 0
+
+    # Create a 2D NumPy array filled with zeros (padding shorter words)
+    words_np = np.zeros((len(sanitized_words), max_length), dtype=np.int32)
+
+    for i, word in enumerate(sanitized_words):
+        ascii_values = [ord(char) for char in word]
+        words_np[i, :len(ascii_values)] = ascii_values
+
+    # Convert guessed_letters_set to lowercase and create a bitmask
+    guessed_letters = set(letter.lower() for letter in guessed_letters_set)
+    guessed_letters_bitmask = 0
+    for letter in guessed_letters:
+        idx = ord(letter) - ord('a')
+        if 0 <= idx < 26:
+            guessed_letters_bitmask |= (1 << idx)
+
+    # Since Numba functions are not async, run them in a separate thread to avoid blocking
+    loop = asyncio.get_event_loop()
     with ThreadPoolExecutor(max_workers=num_threads) as executor:
-        chunk_size = max(len(possible_words) // num_threads, 1)
+        # Split the words_np into chunks for each thread
+        chunk_size = max(len(sanitized_words) // num_threads, 1)
         futures = []
         for i in range(num_threads):
             start = i * chunk_size
-            end = (i + 1) * chunk_size if i != num_threads - 1 else len(possible_words)
-            futures.append(executor.submit(worker, possible_words[start:end]))
-        for future in as_completed(futures):
-            letter_counts.update(future.result())
+            end = (i + 1) * chunk_size if i != num_threads - 1 else len(sanitized_words)
+            chunk = words_np[start:end]
+            futures.append(loop.run_in_executor(executor, letter_freq_worker, chunk, guessed_letters_bitmask))
+        
+        # Gather results as they complete
+        results = await asyncio.gather(*futures)
+    
+    for count_array in results:
+    # Convert lowercase letters to uppercase in the dictionary
+        uppercase_counts = {chr(65 + i): count for i, count in enumerate(count_array)}  # 65 is ASCII for 'A'
+        letter_counts.update(uppercase_counts)
 
     logger.info(f"Computed letter frequencies in {time.time() - start_time:.4f} seconds.")
     return dict(letter_counts)

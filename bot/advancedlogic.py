@@ -2,10 +2,8 @@ import time
 import re
 from collections import Counter
 from typing import List, Dict, Set
-from config import IsFarmBot, logger, SINGLE_LETTER_FREQ_FILE, PAIR_LETTER_FREQ_FILE, OVERALL_LETTER_FREQ_FILE, CLEAN_WORDLIST_FILE
-import json
+from config import logger, SINGLE_LETTER_FREQ_FILE, PAIR_LETTER_FREQ_FILE, OVERALL_LETTER_FREQ_FILE, CLEAN_WORDLIST_FILE
 import os
-import fcntl
 import pickle
 from concurrent.futures import ThreadPoolExecutor, as_completed
 

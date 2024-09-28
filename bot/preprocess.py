@@ -1,7 +1,6 @@
-import os
 import pickle
 import unicodedata
-from collections import defaultdict, Counter
+from collections import Counter
 from config import logger, SINGLE_LETTER_FREQ_FILE, PAIR_LETTER_FREQ_FILE, OVERALL_LETTER_FREQ_FILE, CLEAN_WORDLIST_FILE, WORD_LIST_FILE
 
 def remove_accents(input_str: str) -> str:

@@ -1,7 +1,8 @@
 import pickle
 import unicodedata
 from collections import Counter
-from config import logger, SINGLE_LETTER_FREQ_FILE, PAIR_LETTER_FREQ_FILE, OVERALL_LETTER_FREQ_FILE, CLEAN_WORDLIST_FILE, WORD_LIST_FILE
+from numba import njit
+from config import logger, SINGLE_LETTER_FREQ_FILE, PAIR_LETTER_FREQ_FILE, OVERALL_LETTER_FREQ_FILE, CLEAN_WORDLIST_FILE, CLEAN_WORDLIST_FILE_E, CLEAN_WORDLIST_FILE_NE, WORD_LIST_FILE
 
 def remove_accents(input_str: str) -> str:
     """
@@ -102,6 +103,7 @@ def save_frequencies(single_letter_freq: dict, pair_letter_freq: dict, overall_l
     Saves the precomputed frequencies to pickle files.
     """
     try:
+        logger.debug("Saving precomputed frequencies")
         with open(SINGLE_LETTER_FREQ_FILE, 'wb') as f:
             pickle.dump(single_letter_freq, f)
         with open(PAIR_LETTER_FREQ_FILE, 'wb') as f:
@@ -117,8 +119,57 @@ def save_clean_wordlist(word_list: list) -> None:
     Saves the cleaned word list to a pickle file for efficient loading.
     """
     try:
+        save_clean_wordlist_e(word_list)
+        save_clean_wordlist_ne(word_list)
+        logger.debug("Saving all words")
         with open(CLEAN_WORDLIST_FILE, 'wb') as f:
             pickle.dump(word_list, f)
+        logger.info("Clean wordlist with just e saved successfully.")
+    except Exception as e:
+        logger.error(f"Error saving clean wordlist: {e}")
+
+def save_clean_wordlist_e(word_list: list) -> None:
+    """
+    Saves the cleaned word list to a pickle file for efficient loading.
+    """
+
+    @njit
+    def get_list_words_with_e(word_list: list) -> list:
+        new_list = []
+        for word in word_list:
+            if "E" in word.upper():
+                new_list.append(word)
+        return new_list
+    
+    get_list_words_with_e(word_list[:100])
+    logger.debug("Saving words with e")
+
+    try:
+        with open(CLEAN_WORDLIST_FILE_E, 'wb') as f:
+            pickle.dump(get_list_words_with_e(word_list), f)
+        logger.info("Clean wordlist saved successfully.")
+    except Exception as e:
+        logger.error(f"Error saving clean wordlist: {e}")
+
+def save_clean_wordlist_ne(word_list: list) -> None:
+    """
+    Saves the cleaned word list to a pickle file for efficient loading.
+    """
+    
+    @njit
+    def get_list_words_without_e(word_list: list) -> list:
+        new_list = []
+        for word in word_list:
+            if "E" not in word.upper():
+                new_list.append(word)
+        return new_list
+    
+    get_list_words_without_e(word_list[:100])
+    logger.debug("Saving words without e")
+
+    try:
+        with open(CLEAN_WORDLIST_FILE_NE, 'wb') as f:
+            pickle.dump(get_list_words_without_e(word_list), f)
         logger.info("Clean wordlist saved successfully.")
     except Exception as e:
         logger.error(f"Error saving clean wordlist: {e}")

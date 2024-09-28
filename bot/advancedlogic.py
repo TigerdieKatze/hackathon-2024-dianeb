@@ -2,7 +2,7 @@ import time
 import re
 from collections import Counter
 from typing import List, Dict, Set
-from config import logger, SINGLE_LETTER_FREQ_FILE, PAIR_LETTER_FREQ_FILE, OVERALL_LETTER_FREQ_FILE, CLEAN_WORDLIST_FILE, THREADCOUNT
+from config import logger, SINGLE_LETTER_FREQ_FILE, PAIR_LETTER_FREQ_FILE, OVERALL_LETTER_FREQ_FILE, CLEAN_WORDLIST_FILE, CLEAN_WORDLIST_FILE_E, CLEAN_WORDLIST_FILE_NE, THREADCOUNT
 import os
 import pickle
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -16,6 +16,8 @@ overall_letter_freq: Dict[str, float] = {}
 
 # Clean wordlist loaded from pickle file
 word_list: List[str] = []
+word_list_e: List[str] = []
+word_list_ne: List[str] = []
 word_list_mtime: float = 0.0  # Modification time of the word list file
 
 def load_precomputed_frequencies():
@@ -34,7 +36,7 @@ def load_precomputed_frequencies():
         logger.error(f"Error loading precomputed frequencies: {e}")
 
 def load_clean_wordlist(pickle_file: str = CLEAN_WORDLIST_FILE) -> None:
-    global word_list, word_list_mtime
+    global word_list, word_list_e, word_list_ne, word_list_mtime
     try:
         current_mtime = os.path.getmtime(pickle_file)
     except FileNotFoundError:
@@ -54,6 +56,10 @@ def load_clean_wordlist(pickle_file: str = CLEAN_WORDLIST_FILE) -> None:
     try:
         with open(pickle_file, 'rb') as f:
             word_list = pickle.load(f)
+        with open(CLEAN_WORDLIST_FILE_E, 'rb') as f:
+            word_list_e = pickle.load(f)
+        with open(CLEAN_WORDLIST_FILE_NE, 'rb') as f:
+            word_list_ne = pickle.load(f)
         word_list_mtime = current_mtime
         logger.info(f"Loaded clean wordlist with {len(word_list)} words in {time.time() - start_time:.4f} seconds.")
     except Exception as e:
@@ -96,6 +102,15 @@ async def get_possible_words(word_state: str, guessed_letters: List[str], incorr
     regex = build_regex_pattern(word_state)
     incorrect_letters = set(letter.upper() for letter in incorrect_letters)
     
+    updated_wordlist = word_list
+
+    if 'E' not in (letter.upper() for letter in incorrect_letters):
+        logger.debug("Using wordlist with 'E'")
+        updated_wordlist = word_list_e
+    elif 'E' in (letter.upper() for letter in incorrect_letters):
+        logger.debug("Using wordlist without 'E'")
+        updated_wordlist = word_list_ne
+
     possible_words = []
     num_threads = THREADCOUNT
 
@@ -107,12 +122,12 @@ async def get_possible_words(word_state: str, guessed_letters: List[str], incorr
         return matched
 
     with ThreadPoolExecutor(max_workers=num_threads) as executor:
-        chunk_size = max(len(word_list) // num_threads, 1)
+        chunk_size = max(len(updated_wordlist) // num_threads, 1)
         futures = []
         for i in range(num_threads):
             start = i * chunk_size
-            end = (i + 1) * chunk_size if i != num_threads - 1 else len(word_list)
-            futures.append(executor.submit(worker, word_list[start:end]))
+            end = (i + 1) * chunk_size if i != num_threads - 1 else len(updated_wordlist)
+            futures.append(executor.submit(worker, updated_wordlist[start:end]))
         for future in as_completed(futures):
             possible_words.extend(future.result())
 

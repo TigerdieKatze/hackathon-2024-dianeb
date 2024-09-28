@@ -1,5 +1,6 @@
 __pycache__/*
 config/*
 bot/data/*
+bot/__pycache__/*
 data/*
 config.json

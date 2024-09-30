@@ -13,7 +13,7 @@ services:
       context: ./bot/
       dockerfile: Dockerfile
     environment:
-      - BOT_SECRET=34c3a36e-0c27-4825-bc1a-9056d946d2cd
+      -  BOT_SECRET=<>
     volumes:
       - ./data:/app/data
       - ./config:/app/config
@@ -24,7 +24,7 @@ services:
       context: ./bot/
       dockerfile: Dockerfile
     environment:
-      - BOT_SECRET=17c9e280-3877-483f-820d-21778437cb5e
+      - BOT_SECRET=<>
     volumes:
       - ./data:/app/data
       - ./config:/app/config
@@ -35,7 +35,7 @@ services:
       context: ./bot/
       dockerfile: Dockerfile
     environment:
-      - BOT_SECRET=247d2f92-6fd1-4ff4-8a00-1316a161d981
+      - BOT_SECRET=<>
     volumes:
       - ./data:/app/data
       - ./config:/app/config
@@ -46,7 +46,7 @@ services:
       context: ./bot/
       dockerfile: Dockerfile
     environment:
-      - BOT_SECRET=77e74f26-4940-4fa0-bbe7-17e784168987
+      - BOT_SECRET=<>
     volumes:
       - ./data:/app/data
       - ./config:/app/config
@@ -57,7 +57,7 @@ services:
       context: ./bot/
       dockerfile: Dockerfile
     environment:
-      - BOT_SECRET=3a2faa24-f516-4798-9fa7-260f60b9a2c8
+      - BOT_SECRET=<>
     volumes:
       - ./data:/app/data
       - ./config:/app/config
@@ -68,7 +68,7 @@ services:
       context: ./bot/
       dockerfile: Dockerfile
     environment:
-      - BOT_SECRET=919df147-87d3-4a71-bbb6-c556ee99ec61
+      - BOT_SECRET=<>
     volumes:
       - ./data:/app/data
       - ./config:/app/config
@@ -79,7 +79,7 @@ services:
       context: ./bot/
       dockerfile: Dockerfile
     environment:
-      - BOT_SECRET=89d31b81-010c-496b-ae7e-5a39fd331686
+      - BOT_SECRET=<>
     volumes:
       - ./data:/app/data
       - ./config:/app/config
@@ -90,7 +90,7 @@ services:
       context: ./bot/
       dockerfile: Dockerfile
     environment:
-      - BOT_SECRET=b3c2ce3a-d445-4ad7-bb12-27c327f21b3a
+      - BOT_SECRET=<>
     volumes:
       - ./data:/app/data
       - ./config:/app/config
